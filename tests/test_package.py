@@ -66,7 +66,11 @@ def test_setup_requires_sphinx_9_and_dependencies() -> None:
         ("prefect_main_flows", [], "env"),
         ("prefect_on_error", "warn", "env"),
     ]
-    assert app.directives == ["prefect-flow", "prefect-flow-index"]
+    assert app.directives == [
+        "prefect-flow",
+        "prefect-params",
+        "prefect-flow-index",
+    ]
 
 
 def test_sphinxcontrib_is_a_namespace_package() -> None:

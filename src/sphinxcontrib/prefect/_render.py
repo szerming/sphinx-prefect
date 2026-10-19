@@ -14,6 +14,9 @@ from sphinxcontrib.prefect._description import (
     resolve_flow_description,
 )
 from sphinxcontrib.prefect._import import flow_entrypoint
+from sphinxcontrib.prefect._markers import parse_mainflow_markers
+from sphinxcontrib.prefect._models import ModelCollection, render_model_sections
+from sphinxcontrib.prefect._params import render_parameter_table
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -70,15 +73,22 @@ def flow_node_id(flow: Flow) -> str:
     return nodes.make_id(f"prefect-flow-{flow_entrypoint(flow)}")
 
 
+def params_node_id(flow: Flow) -> str:
+    """Return a stable, unique section id for *flow*'s parameter section."""
+    return nodes.make_id(f"prefect-params-{flow_entrypoint(flow)}")
+
+
 def render_flow_section(
     directive: SphinxDirective,
     flow: Flow,
-    markers: MarkerResult,
+    markers: MarkerResult | None,
+    models: ModelCollection,
     *,
     description_from: str | None = None,
     node_id: str | None = None,
+    include_description: bool = True,
 ) -> nodes.section:
-    """Render the ``prefect-flow`` section for *flow*."""
+    """Render a flow section for ``prefect-flow`` or ``prefect-params``."""
     section = make_section(
         directive,
         flow.name or type(flow).__name__,
@@ -91,13 +101,19 @@ def render_flow_section(
     fields.append(("Signature", str(inspect.signature(flow.fn))))
     add_field_list(section, fields)
 
-    if description_from is not None:
-        description_file = read_description_file(directive, description_from)
-        if description_file is not None:
-            render_external_description(directive, section, description_file)
-    else:
-        description = resolve_flow_description(flow, markers)
-        if description:
-            render_rst_description(directive, section, description)
+    if include_description:
+        if description_from is not None:
+            description_file = read_description_file(directive, description_from)
+            if description_file is not None:
+                render_external_description(directive, section, description_file)
+        else:
+            if markers is None:
+                markers = parse_mainflow_markers(flow.fn.__doc__)
+            description = resolve_flow_description(flow, markers)
+            if description:
+                render_rst_description(directive, section, description)
+
+    render_parameter_table(directive, section, flow, models)
+    render_model_sections(directive, section, models.models)
 
     return section

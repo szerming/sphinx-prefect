@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from sphinxcontrib.prefect._directives import (
     PrefectFlowDirective,
     PrefectFlowIndexDirective,
+    PrefectParamsDirective,
 )
 
 if TYPE_CHECKING:
@@ -26,6 +27,7 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.add_config_value("prefect_main_flows", [], "env", types=list)
     app.add_config_value("prefect_on_error", "warn", "env", types=str)
     app.add_directive("prefect-flow", PrefectFlowDirective)
+    app.add_directive("prefect-params", PrefectParamsDirective)
     app.add_directive("prefect-flow-index", PrefectFlowIndexDirective)
 
     return {

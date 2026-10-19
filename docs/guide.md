@@ -3,9 +3,9 @@
 This guide shows how to document Prefect flows in a Sphinx project with
 `sphinx-contrib-prefect`.
 
-The guide describes the currently implemented `prefect-flow` and
-`prefect-flow-index` directives and marks features that are planned for the
-rest of v0.1. For the full design, see
+The guide describes the currently implemented `prefect-flow`,
+`prefect-params`, and `prefect-flow-index` directives and marks features that
+are planned for the rest of v0.1. For the full design, see
 the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 
 ## Current status
@@ -20,7 +20,8 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | Main-flow docstring markers and stripping | Available |
 | Module scanning with `prefect-flow-index` | Available |
 | `prefect_on_error` warn/error policy | Available |
-| Parameter tables and Pydantic model sections | Planned — [#6](https://github.com/szerming/sphinx-prefect/issues/6) |
+| Parameter tables from Prefect's parameter schema | Available |
+| Pydantic model documentation with nested models | Available |
 | Runtime Mermaid flow graph | Planned — [#7](https://github.com/szerming/sphinx-prefect/issues/7) |
 | Subflow/task sections and cross-references | Planned — [#8](https://github.com/szerming/sphinx-prefect/issues/8) |
 
@@ -182,10 +183,13 @@ For each flow, the directive emits:
 - a **Signature** field from `inspect.signature(flow.fn)`;
 - the `flow.description` docstring, normalized with `inspect.cleandoc` and
   parsed as reStructuredText;
+- a **Parameters** table when the flow declares parameters;
+- a `pydantic-model` block for each Pydantic model used by a parameter,
+  including nested models;
 - any directive body content, after the description.
 
 A flow with no docstring or description renders normally; the description is
-simply omitted.
+simply omitted. A flow with no parameters omits the parameter table.
 
 ## Descriptions
 
@@ -238,6 +242,76 @@ The format is chosen by file extension:
 
 The external file replaces the docstring description. The directive body is
 still appended after it.
+
+## Parameters and Pydantic models
+
+Prefect derives `flow.parameters` from the function signature. The directive
+reads that schema, sorts parameters by their signature position, and renders a
+table with these columns:
+
+| Column | Contents |
+| --- | --- |
+| Parameter | The parameter name, in code style |
+| Type | The annotation, with links to documented Pydantic models |
+| Required | `Required` or `Optional` |
+| Default | The default value, `factory` for a `default_factory`, or `—` when there is no default |
+| Description | Text from the docstring's Google-style `Args:` section |
+
+Descriptions must use Google-style `Args:` sections. Sphinx/NumPy-style
+parameter sections do not populate this table automatically. A missing
+description leaves the cell empty.
+
+Pydantic v2 models used as parameters are documented with
+`sphinxcontrib-pydantic`. For example:
+
+```python
+from pydantic import BaseModel, Field
+
+
+class Address(BaseModel):
+    """A postal address."""
+
+    street: str = Field(description="Street line.")
+    city: str = Field(default="Springfield", description="City name.")
+
+
+class Profile(BaseModel):
+    """A user profile."""
+
+    name: str = Field(description="Display name.")
+    address: Address = Field(description="Where the user lives.")
+
+
+@flow
+def eda(profile: Profile) -> None:
+    """Run the analysis.
+
+    Args:
+        profile: Profile of the user running the analysis.
+    """
+```
+
+The `Profile` parameter links to a generated model block. Both `Profile` and
+its nested `Address` model get their own block with a field summary, validator
+summary, and detailed field documentation, so `Field(description=...)` text
+appears. Recursive models terminate safely and are rendered once per build.
+The first occurrence in the build indexes the model; repeated models later in
+the build use `:noindex:` so Sphinx does not emit duplicate-object warnings.
+
+Only importable module-level Pydantic v2 models can be documented. Local
+classes, nested classes, dynamically generated classes that cannot be imported
+by name, and Pydantic v1 models are omitted with a diagnostic. Under
+`prefect_on_error = "error"` that diagnostic fails the build.
+
+To render the flow's entrypoint and version, signature, parameter table, and
+model blocks without the description or flow graph, use `prefect-params`:
+
+```rst
+.. prefect-params:: flows.eda
+```
+
+The directive accepts the same `module.qualname` and `module:qualname`
+entrypoint forms as `prefect-flow`.
 
 ## Main-flow markers
 
@@ -360,13 +434,16 @@ Typical causes are:
 - a `:description-from:` path does not exist or cannot be read;
 - a `.md` description is used without the `markdown` extra;
 - a docstring marker has malformed YAML or an invalid value;
+- a parameter's Pydantic model is a Pydantic v1 model, a local or nested
+  class, or a dynamically generated class that cannot be imported by name;
 - a module in `prefect_modules` or a `prefect_main_flows` entry cannot be
   imported or does not name a Prefect flow.
 
 ## Current limitations and safety
 
-- Parameter tables, Pydantic models, graphs, and subflow/task sections are
-  tracked in the [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
+- Parameter tables and Pydantic model documentation cover flows. Task
+  parameters, graphs, and subflow/task sections are tracked in the
+  [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
 - Docstrings and external `.rst` files are treated as reStructuredText.
   External Markdown descriptions are opt-in through the `markdown` extra and
   are parsed as MyST; MyST docstrings are not supported.

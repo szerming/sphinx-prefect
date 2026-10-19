@@ -45,6 +45,11 @@ _Avoid_: Live DAG, execution DAG
 Deriving a flow graph from source or object structure without executing the flow.
 _Avoid_: Offline analysis (ambiguous; see Offline)
 
+**Parameter Table**:
+A generated table of a flow's or task's parameters, showing names, types,
+requiredness, defaults, and descriptions.
+_Avoid_: Signature table, arguments table
+
 **Pydantic Model Documentation**:
 Rendered documentation for a Pydantic model used as a flow or task parameter.
 _Avoid_: Model spec, schema docs

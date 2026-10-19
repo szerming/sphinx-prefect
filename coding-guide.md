@@ -35,18 +35,21 @@ src/sphinxcontrib/prefect/
 ├── _markers.py       # main-flow docstring marker parsing
 ├── _scan.py          # module scanning and main-flow selection
 ├── _description.py   # docstring and external-file description resolution
+├── _params.py        # parameter table rendering
+├── _models.py        # Pydantic model discovery and pydantic-model emission
 ├── _render.py        # doctree helpers and shared flow-section rendering
 └── _errors.py        # prefect_on_error handling and source-located diagnostics
 
 tests/
 ├── conftest.py
 ├── roots/
-│   ├── test-flow/    # flow directive, fixture flows, external descriptions
+│   ├── test-flow/    # flow directive, fixture flows, models, descriptions
 │   └── test-index/   # module scan and prefect-flow-index
 ├── test_flow_directive.py
 ├── test_index_directive.py
 ├── test_markers.py
 ├── test_package.py
+├── test_parameters.py
 └── test_scan.py
 
 docs/
@@ -59,8 +62,7 @@ docs/
 `src/sphinxcontrib/` is a native PEP 420 namespace package. Do not add
 `src/sphinxcontrib/__init__.py`.
 
-The specification names modules for the remaining tickets: `_markers.py`,
-`_description.py`, `_params.py`, `_models.py`, `_dag.py`, and `_graph.py`.
+The specification names the remaining modules `_dag.py` and `_graph.py`.
 Keep each concern in its module rather than growing `_directives.py`.
 
 ## Architecture rules
@@ -126,6 +128,35 @@ Resolve external descriptions in `_description.py`:
 
 Docstrings are always reStructuredText. Do not auto-detect Markdown in a
 docstring, and do not pass Markdown through `inspect.cleandoc`.
+
+### Parameters and models
+
+Keep parameter table construction in `_params.py` and model discovery in
+`_models.py`.
+
+- Read parameter metadata from `flow.parameters.model_dump()` and order it by
+  each property's `position`.
+- Use the signature annotations (`typing.get_type_hints(..., include_extras=True)`)
+  for display types and for identifying model parameters; use the Prefect schema
+  for requiredness, defaults, and descriptions. `collect_flow_models()` returns
+  the resolved hints so the table and model walker share one lookup.
+- Link documented Pydantic models with Python-domain `pending_xref` nodes. Do
+  not hand-write URLs.
+- `_models.collect_flow_models()` walks `Annotated`, unions, container
+  generics, and `model_fields`, keyed by `(module, qualname)` so recursive
+  models terminate.
+- Accept only importable module-level Pydantic v2 classes. Pydantic v1, local,
+  nested, and non-importable dynamic models are diagnostics routed through
+  `prefect_on_error`.
+- Emit models as `pydantic-model` blocks parsed into the flow section, with
+  `:show-field-summary:`, `:show-validator-summary:`, and `:show-members:`.
+- Deduplicate models by checking the Python domain's registered objects: the
+  first occurrence indexes, later ones add `:noindex:`.
+- Directives call `collect_flow_models()` and route its errors through
+  `report_diagnostics()`; `render_flow_section()` only assembles nodes.
+
+`render_flow_section()` owns the shared order: metadata fields, optional
+description, parameter table and models, then directive body content.
 
 ### Module scanning
 
@@ -201,6 +232,10 @@ roots as `tests/roots/test-<name>`.
   deduplication, entrypoint normalization, and scan diagnostics.
 - `tests/test_index_directive.py` covers rendered order, selection, `:show-dag:`
   and `:no-dag:`, empty scans, and warn/error behavior for scan failures.
+- `tests/test_parameters.py` covers scalar rows, Google-style descriptions,
+  model cross-references, nested and recursive models, RootModel unwrapping,
+  dynamic and Pydantic v1 diagnostics, cross-page model deduplication, and
+  `prefect-params` output.
 - Directive tests assert both doctree nodes and rendered HTML. Description
   tests cover overrides, missing files, MyST rendering when `myst-parser` is
   installed, and the missing-parser warn/error paths. The MyST happy-path test

@@ -9,17 +9,18 @@ runtime Mermaid generation, so no Prefect server or network access is required
 for self-contained flows.
 
 **Status:** v0.1 is in development. The package scaffold, the core
-`prefect-flow` directive, main-flow docstring markers, external RST and MyST
-Markdown descriptions, and module scanning with `prefect-flow-index` are
+`prefect-flow` and `prefect-params` directives, main-flow docstring markers,
+external RST and MyST Markdown descriptions, module scanning with
+`prefect-flow-index`, parameter tables, and Pydantic model documentation are
 implemented. The remaining work is tracked in
-issues [#6–#10](https://github.com/szerming/sphinx-prefect/issues).
+issues [#7–#10](https://github.com/szerming/sphinx-prefect/issues).
 
 ## Project context
 
 Read these before changing behavior or architecture:
 
 - **[Usage guide](docs/guide.md)** — complete examples for documenting flows
-  with `prefect-flow` and `prefect-flow-index`.
+  with `prefect-flow`, `prefect-params`, and `prefect-flow-index`.
 - **[v0.1 specification](docs/specs/0001-sphinx-prefect-v0.1.md)** — goals,
   behavior, compatibility, and the ticket map.
 - **[Architecture decision records](docs/adr/)** — accepted design decisions:
@@ -74,8 +75,20 @@ Document a flow by its importable entrypoint:
 ```
 
 The directive renders the flow's title, entrypoint, optional version,
-signature, and reStructuredText description. Both `mypkg.flows.eda` and
-`mypkg.flows:eda` entrypoint forms are accepted.
+signature, reStructuredText description, parameter table, and Pydantic model
+documentation. Both `mypkg.flows.eda` and `mypkg.flows:eda` entrypoint forms
+are accepted.
+
+Prefect reads parameter descriptions from Google-style `Args:` sections. Each
+row shows the parameter name, type, required/optional status, default, and
+description. Pydantic parameter models are rendered by
+`sphinxcontrib-pydantic`, including nested models and `Field(description=...)`
+text. Use `prefect-params` to render the flow's metadata fields, parameter
+table, and model sections without the description:
+
+```rst
+.. prefect-params:: mypkg.flows.eda
+```
 
 Use an external RST file when the description outgrows the docstring:
 
@@ -117,9 +130,10 @@ imports user code, so import-time side effects may run during the build.
 apply to every generated section when
 [#7](https://github.com/szerming/sphinx-prefect/issues/7) lands.
 
-The planned v0.1 interface also includes `prefect-params` and `prefect-dag`.
-See the [usage guide](docs/guide.md) for marker syntax, a complete project,
-error handling, current limitations, and the full planned interface.
+The planned v0.1 interface also includes `prefect-dag`. See the
+[usage guide](docs/guide.md) for marker syntax, a complete project, parameter
+and model details, error handling, current limitations, and the full planned
+interface.
 
 ## Development
 
