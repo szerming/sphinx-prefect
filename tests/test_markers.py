@@ -106,7 +106,8 @@ def test_malformed_yaml_is_reported() -> None:
 def test_missing_frontmatter_closing_delimiter_is_reported_and_stripped() -> None:
     docstring = """---
     mainflow: true
-    Run the flow.
+    Notes: this is description prose.
+    - a list item
     """
 
     result = parse_mainflow_markers(docstring)
@@ -114,7 +115,7 @@ def test_missing_frontmatter_closing_delimiter_is_reported_and_stripped() -> Non
     assert result.is_main_flow is False
     assert len(result.errors) == 1
     assert "missing closing" in result.errors[0]
-    assert result.description == "Run the flow."
+    assert result.description == ("Notes: this is description prose.\n- a list item")
 
 
 def test_yaml_mainflow_must_be_boolean() -> None:

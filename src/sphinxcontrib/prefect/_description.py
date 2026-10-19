@@ -35,7 +35,7 @@ def read_description_file(
             f"Could not find description file {str(source)!r}.",
         )
         return None
-    if source.suffix.lower() == ".md":
+    if source.suffix.lower() in {".md", ".markdown"}:
         report_error(
             directive,
             "Markdown description files are not supported yet (see issue #4); "

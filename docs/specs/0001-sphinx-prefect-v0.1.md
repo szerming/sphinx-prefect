@@ -414,6 +414,7 @@ Import Prefect and user modules lazily inside directive execution, not during ex
 | Sphinx | `>=9,<10` |
 | Prefect | `>=3,<4` (tested against 3.8.x) |
 | Pydantic | `>=2.10,<3` |
+| PyYAML | `>=5.4,<7` |
 | sphinxcontrib-mermaid | `>=2.1,<3` |
 | sphinxcontrib-pydantic | `>=0.4,<0.5` |
 | MyST | optional, only for `.md` descriptions |

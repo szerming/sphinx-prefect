@@ -10,7 +10,7 @@ import yaml
 
 _AT_MAINFLOW = re.compile(r"^\s*@mainflow\s*$")
 _MAINFLOW_FIELD = re.compile(r"^:mainflow:\s*(?P<value>.*?)\s*$")
-_FRONTMATTER_LINE = re.compile(r"^\s*(?:[A-Za-z_][\w-]*\s*:|-\s+)")
+_MAINFLOW_KEY = re.compile(r"^\s*mainflow\s*:")
 _FRONTMATTER_ERROR = "Malformed main-flow frontmatter: "
 
 
@@ -83,15 +83,9 @@ def _strip_frontmatter(text: str) -> tuple[list[str], bool | None, list[str]]:
         None,
     )
     if closing is None:
-        index = 1
-        while (
-            index < len(lines)
-            and lines[index].strip()
-            and _FRONTMATTER_LINE.match(lines[index])
-        ):
-            index += 1
+        remaining = [line for line in lines[1:] if not _MAINFLOW_KEY.match(line)]
         return (
-            lines[index:],
+            remaining,
             None,
             [f"{_FRONTMATTER_ERROR}missing closing '---'."],
         )

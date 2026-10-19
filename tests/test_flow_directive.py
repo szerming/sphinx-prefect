@@ -233,6 +233,10 @@ def test_explicit_description_does_not_contain_docstring_marker(
     assert "must not leak" not in text
     assert "@mainflow" not in text
 
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert "Explicit description with <em>emphasis</em>." in html
+    assert "@mainflow" not in html
+
 
 def test_malformed_frontmatter_warns_by_default(
     make_app: Any,
@@ -275,6 +279,52 @@ def test_malformed_frontmatter_raises_in_strict_mode(
 
     with pytest.raises(SphinxError, match="Malformed main-flow frontmatter"):
         app.build()
+
+
+def test_missing_frontmatter_closing_warns_and_preserves_prose(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Missing closing\n===============\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.missing_frontmatter_closing\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    warnings = app.warning.getvalue()
+    assert "missing closing" in warnings
+    assert "index.rst" in warnings
+    section = find_section(
+        app.env.get_doctree("index"),
+        "missing-frontmatter-closing",
+    )
+    assert section is not None
+    text = section.astext()
+    assert "Notes: this is description prose." in text
+    assert "mainflow: true" not in text
+
+
+def test_indented_field_in_a_literal_block_is_not_a_marker(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Literal\n=======\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.indented_field_literal\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    section = find_section(app.env.get_doctree("index"), "indented-field-literal")
+    assert section is not None
+    assert ":mainflow: true" in section.astext()
+    assert section.findall(nodes.literal_block)
 
 
 def test_description_from_rst_overrides_the_docstring(
@@ -335,6 +385,9 @@ def test_description_from_is_relative_to_the_source_directory(
     section = find_section(app.env.get_doctree("nested/page"), "main")
     assert section is not None
     assert "This description comes from an external file." in section.astext()
+
+    html = (app.outdir / "nested" / "page.html").read_text(encoding="utf-8")
+    assert "This description comes from an external <em>file</em>." in html
 
 
 def test_missing_description_file_warns_and_omits_the_description(

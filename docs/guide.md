@@ -196,7 +196,7 @@ Use an external file to keep long descriptions out of the docstring:
   containing `conf.py`), not the current document.
 - `.rst` files are parsed as reStructuredText and are registered as build
   dependencies.
-- `.md` files are planned for
+- `.md` and `.markdown` files are planned for
   [#4](https://github.com/szerming/sphinx-prefect/issues/4). Until then they
   produce a warning (or an error under `prefect_on_error = "error"`).
 - A missing file follows `prefect_on_error` and renders no description.

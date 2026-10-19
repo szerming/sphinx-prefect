@@ -72,6 +72,24 @@ def malformed_markers() -> None:
     """
 
 
+@flow
+def missing_frontmatter_closing() -> None:
+    """---
+    mainflow: true
+    Notes: this is description prose.
+    """
+
+
+@flow
+def indented_field_literal() -> None:
+    """Run a flow that shows marker syntax in a literal block.
+
+    Example::
+
+        :mainflow: true
+    """
+
+
 @task
 def not_a_flow() -> None:
     """A task, which is not a flow."""

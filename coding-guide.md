@@ -115,8 +115,8 @@ Resolve external descriptions in `_description.py`:
 - external files replace the docstring description;
 - `.rst` (and other non-Markdown files) are parsed as reStructuredText;
 - successful reads call `env.note_dependency()`;
-- missing/unreadable files and `.md` files (until ticket #4) follow
-  `prefect_on_error`.
+- missing/unreadable files and Markdown files (`.md`/`.markdown`, until ticket
+  #4) follow `prefect_on_error`.
 
 ### Error policy
 
