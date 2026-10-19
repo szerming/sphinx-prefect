@@ -14,12 +14,14 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | Resolve flows by `module.qualname` or `module:qualname` | Available |
 | Flow title, entrypoint, version, signature, and RST description | Available |
 | Directive body content appended after the description | Available |
+| External RST descriptions with `:description-from:` | Available |
+| Main-flow docstring markers and stripping | Available (consumed by [#5](https://github.com/szerming/sphinx-prefect/issues/5)) |
 | `prefect_on_error` warn/error policy | Available |
 | Parameter tables and Pydantic model sections | Planned — [#6](https://github.com/szerming/sphinx-prefect/issues/6) |
 | Runtime Mermaid flow graph | Planned — [#7](https://github.com/szerming/sphinx-prefect/issues/7) |
 | Subflow/task sections and cross-references | Planned — [#8](https://github.com/szerming/sphinx-prefect/issues/8) |
 | Module scanning with `prefect-flow-index` | Planned — [#5](https://github.com/szerming/sphinx-prefect/issues/5) |
-| External RST/MyST descriptions | Planned — [#3](https://github.com/szerming/sphinx-prefect/issues/3), [#4](https://github.com/szerming/sphinx-prefect/issues/4) |
+| External MyST Markdown descriptions | Planned — [#4](https://github.com/szerming/sphinx-prefect/issues/4) |
 
 ## Installation
 
@@ -28,7 +30,7 @@ pip install sphinx-contrib-prefect
 ```
 
 Install the `markdown` extra if you plan to use MyST Markdown descriptions once
-that feature lands:
+that feature lands in [#4](https://github.com/szerming/sphinx-prefect/issues/4):
 
 ```bash
 pip install "sphinx-contrib-prefect[markdown]"
@@ -177,6 +179,79 @@ For each flow, the directive emits:
 A flow with no docstring or description renders normally; the description is
 simply omitted.
 
+## Descriptions
+
+By default, the description comes from `flow.description`, which Prefect fills
+from the function docstring (or from an explicit `description=` on `@flow`).
+Docstrings are always treated as reStructuredText.
+
+Use an external file to keep long descriptions out of the docstring:
+
+```rst
+.. prefect-flow:: flows.eda
+   :description-from: descriptions/eda.rst
+```
+
+- The path is resolved relative to the Sphinx source directory (the directory
+  containing `conf.py`), not the current document.
+- `.rst` files are parsed as reStructuredText and are registered as build
+  dependencies.
+- `.md` files are planned for
+  [#4](https://github.com/szerming/sphinx-prefect/issues/4). Until then they
+  produce a warning (or an error under `prefect_on_error = "error"`).
+- A missing file follows `prefect_on_error` and renders no description.
+
+The external file replaces the docstring description. The directive body is
+still appended after it.
+
+## Main-flow markers
+
+A flow can be marked as a **main flow** in its docstring using any of three
+forms:
+
+```python
+@flow
+def eda(seed: int = 1):
+    """Run the EDA build.
+
+    @mainflow
+    """
+```
+
+```python
+@flow
+def eda(seed: int = 1):
+    """---
+    mainflow: true
+    ---
+    Run the EDA build.
+    """
+```
+
+```python
+@flow
+def eda(seed: int = 1):
+    """Run the EDA build.
+
+    :mainflow:
+    """
+```
+
+Rules:
+
+- `@mainflow` must be a standalone docstring line. It is literal text, not a
+  Python decorator.
+- YAML frontmatter is parsed only at the start of the docstring.
+  `mainflow: true` selects the flow; `mainflow: false` does not.
+- `:mainflow:` and `:mainflow: true` select the flow; `:mainflow: false` does
+  not.
+- Any true marker wins over a false marker, and the conflict emits a warning.
+- All marker syntax is stripped from the rendered description.
+- Explicit selection with `.. prefect-flow::` always wins. Markers will drive
+  automatic selection when `prefect-flow-index` lands in
+  [#5](https://github.com/szerming/sphinx-prefect/issues/5).
+- Malformed YAML or an invalid marker value follows `prefect_on_error`.
+
 ## Error handling
 
 Missing modules, missing attributes, and objects that are not Prefect `Flow`
@@ -200,15 +275,22 @@ Typical causes are:
 
 - the flow package is not on `sys.path` in `conf.py`;
 - the entrypoint has a typo;
-- the directive points at a `@task` or a plain function instead of a `@flow`.
+- the directive points at a `@task` or a plain function instead of a `@flow`;
+- a `:description-from:` path does not exist or cannot be read;
+- a docstring marker has malformed YAML or an invalid value.
 
 ## Current limitations and safety
 
-- Only `prefect-flow` metadata rendering is implemented. Parameter tables,
-  Pydantic models, graphs, subflow/task sections, and module scanning are
-  tracked in the [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
-- Docstrings are treated as reStructuredText. External MyST descriptions are
-  not implemented yet.
+- Parameter tables, Pydantic models, graphs, subflow/task sections, and module
+  scanning are tracked in the
+  [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
+- Docstrings and external `.rst` files are treated as reStructuredText.
+  External MyST Markdown descriptions are planned for
+  [#4](https://github.com/szerming/sphinx-prefect/issues/4).
+- Main-flow markers are parsed and stripped, but automatic module scanning is
+  not implemented until
+  [#5](https://github.com/szerming/sphinx-prefect/issues/5). Use an explicit
+  `.. prefect-flow::` directive for now.
 - The directive imports the flow's module but does not execute the flow body.
   The planned runtime DAG feature will execute it when explicitly enabled; see
   [ADR-0001](adr/0001-runtime-prefect-dag.md).

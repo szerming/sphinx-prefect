@@ -8,9 +8,10 @@ normal Sphinx sections. The v0.1 design renders flow graphs with Prefect's own
 runtime Mermaid generation, so no Prefect server or network access is required
 for self-contained flows.
 
-**Status:** v0.1 is in development. The package scaffold and the core
-`prefect-flow` directive are implemented. The remaining work is tracked in
-issues [#3–#10](https://github.com/szerming/sphinx-prefect/issues).
+**Status:** v0.1 is in development. The package scaffold, the core
+`prefect-flow` directive, main-flow docstring markers, and external RST
+descriptions are implemented. The remaining work is tracked in
+issues [#4–#10](https://github.com/szerming/sphinx-prefect/issues).
 
 ## Project context
 
@@ -40,7 +41,9 @@ Read these before changing behavior or architecture:
 pip install sphinx-contrib-prefect
 ```
 
-For MyST Markdown external descriptions, install the `markdown` extra:
+For MyST Markdown external descriptions (planned for
+[#4](https://github.com/szerming/sphinx-prefect/issues/4)), install the
+`markdown` extra:
 
 ```bash
 pip install "sphinx-contrib-prefect[markdown]"
@@ -71,9 +74,23 @@ The directive renders the flow's title, entrypoint, optional version,
 signature, and reStructuredText description. Both `mypkg.flows.eda` and
 `mypkg.flows:eda` entrypoint forms are accepted.
 
+Use an external RST file when the description outgrows the docstring:
+
+```rst
+.. prefect-flow:: mypkg.flows.eda
+   :description-from: descriptions/eda.rst
+```
+
+The path is resolved relative to the Sphinx source directory (the directory
+containing `conf.py`). Docstrings may also carry a main-flow marker
+(`@mainflow`, YAML frontmatter, or `:mainflow:`); marker syntax is stripped
+from the rendered description. Markers will drive `prefect-flow-index` once
+issue [#5](https://github.com/szerming/sphinx-prefect/issues/5) lands.
+
 The planned v0.1 interface also includes `prefect-params`, `prefect-dag`, and
-`prefect-flow-index`. See the [usage guide](docs/guide.md) for a complete
-project, error handling, current limitations, and the full planned interface.
+`prefect-flow-index`. See the [usage guide](docs/guide.md) for marker syntax,
+a complete project, error handling, current limitations, and the full planned
+interface.
 
 ## Development
 

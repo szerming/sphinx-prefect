@@ -125,6 +125,233 @@ def test_flow_without_description_renders(make_app: Any, tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize(
+    ("entrypoint", "title", "description"),
+    [
+        (
+            "fixture_pkg.flows.marked_with_at",
+            "marked-with-at",
+            "Run a flow selected with a standalone marker.",
+        ),
+        (
+            "fixture_pkg.flows.marked_with_frontmatter",
+            "marked-with-frontmatter",
+            "Run a flow selected with YAML frontmatter.",
+        ),
+        (
+            "fixture_pkg.flows.marked_with_field",
+            "marked-with-field",
+            "Run a flow selected with a reST field.",
+        ),
+    ],
+)
+def test_mainflow_markers_are_stripped_from_descriptions(
+    make_app: Any,
+    tmp_path: Path,
+    entrypoint: str,
+    title: str,
+    description: str,
+) -> None:
+    src = make_src(
+        tmp_path,
+        f"Markers\n=======\n\n.. prefect-flow:: {entrypoint}\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    section = find_section(app.env.get_doctree("index"), title)
+    assert section is not None
+    text = section.astext()
+    assert description in text
+    assert "@mainflow" not in text
+    assert ":mainflow:" not in text
+    assert "mainflow: true" not in text
+
+
+def test_conflicting_markers_warn_and_still_render(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Conflict\n========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.conflicting_markers\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    warnings = app.warning.getvalue()
+    assert "Conflicting main-flow markers" in warnings
+    assert "index.rst" in warnings
+    section = find_section(app.env.get_doctree("index"), "conflicting-markers")
+    assert section is not None
+    assert "Run a flow with conflicting markers." in section.astext()
+
+
+def test_explicit_description_does_not_contain_docstring_marker(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Explicit\n========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.explicit_description\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    section = find_section(app.env.get_doctree("index"), "explicit-description")
+    assert section is not None
+    text = section.astext()
+    assert "Explicit description with emphasis." in text
+    assert "must not leak" not in text
+    assert "@mainflow" not in text
+
+
+def test_malformed_frontmatter_warns_by_default(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Malformed\n=========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.malformed_markers\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    warnings = app.warning.getvalue()
+    assert "Malformed main-flow frontmatter" in warnings
+    assert "index.rst" in warnings
+    section = find_section(app.env.get_doctree("index"), "malformed-markers")
+    assert section is not None
+    assert "Run a flow with malformed frontmatter." in section.astext()
+
+
+def test_malformed_frontmatter_raises_in_strict_mode(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Malformed\n=========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.malformed_markers\n",
+        config='prefect_on_error = "error"',
+    )
+
+    app = make_app(
+        "html",
+        srcdir=src,
+        builddir=src / "_build",
+        warningiserror=False,
+    )
+
+    with pytest.raises(SphinxError, match="Malformed main-flow frontmatter"):
+        app.build()
+
+
+def test_description_from_rst_overrides_the_docstring(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "External\n========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.main\n"
+        "   :description-from: description.rst\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    section = find_section(app.env.get_doctree("index"), "main")
+    assert section is not None
+    text = section.astext()
+    assert "This description comes from an external file." in text
+    assert "first item" in text
+    assert "Run the main fixture flow." not in text
+    assert "reStructuredText" not in text
+
+    emphasis = [node.astext() for node in section.findall(nodes.emphasis)]
+    assert "file" in emphasis
+    assert "reStructuredText" not in emphasis
+
+
+def test_missing_description_file_warns_and_omits_the_description(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Missing\n=======\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.main\n"
+        "   :description-from: missing.rst\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    warnings = app.warning.getvalue()
+    assert "Could not find description file" in warnings
+    assert "index.rst" in warnings
+    section = find_section(app.env.get_doctree("index"), "main")
+    assert section is not None
+    assert "fixture_pkg.flows.main" in section.astext()
+    assert "Run the main fixture flow." not in section.astext()
+
+
+def test_missing_description_file_raises_in_strict_mode(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Missing\n=======\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.main\n"
+        "   :description-from: missing.rst\n",
+        config='prefect_on_error = "error"',
+    )
+
+    app = make_app(
+        "html",
+        srcdir=src,
+        builddir=src / "_build",
+        warningiserror=False,
+    )
+
+    with pytest.raises(SphinxError, match="Could not find description file"):
+        app.build()
+
+
+def test_markdown_description_warns_that_myst_is_required(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Markdown\n========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.main\n"
+        "   :description-from: description.md\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    warnings = app.warning.getvalue()
+    assert "MyST" in warnings
+    assert "index.rst" in warnings
+    section = find_section(app.env.get_doctree("index"), "main")
+    assert section is not None
+    assert "Run the main fixture flow." not in section.astext()
+
+
+@pytest.mark.parametrize(
     ("entrypoint", "message"),
     [
         ("fixture_pkg.missing.main", "Could not import module"),

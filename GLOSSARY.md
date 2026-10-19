@@ -28,6 +28,11 @@ _Avoid_: Flow address, object path
 Docstring metadata that marks a flow for selection during a module scan.
 _Avoid_: Main annotation, magic string
 
+**External Description**:
+A flow description read from a file selected with `:description-from:`,
+instead of from the flow docstring.
+_Avoid_: Override description, file docstring
+
 **Module Scan**:
 Importing configured Python modules and inspecting their flow objects to find marked main flows.
 _Avoid_: Auto-discovery, flow crawl

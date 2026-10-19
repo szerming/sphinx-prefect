@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import inspect
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from docutils import nodes
+from docutils.parsers.rst import directives
 from sphinx.util.docutils import SphinxDirective
 
-from sphinxcontrib.prefect._errors import report_error
+from sphinxcontrib.prefect._description import (
+    default_description,
+    read_description_file,
+)
+from sphinxcontrib.prefect._errors import report_error, report_warning
 from sphinxcontrib.prefect._import import ObjectResolutionError, resolve_flow
+from sphinxcontrib.prefect._markers import parse_mainflow_markers
 from sphinxcontrib.prefect._render import (
     add_field_list,
     make_section,
@@ -28,6 +34,9 @@ class PrefectFlowDirective(SphinxDirective):
     optional_arguments = 0
     final_argument_whitespace = False
     has_content = True
+    option_spec: ClassVar[dict[str, Any]] = {
+        "description-from": directives.unchanged_required
+    }
 
     def run(self) -> list[nodes.Node]:
         try:
@@ -38,6 +47,12 @@ class PrefectFlowDirective(SphinxDirective):
         return [self.render_flow(flow)]
 
     def render_flow(self, flow: Flow) -> nodes.section:
+        markers = parse_mainflow_markers(flow.fn.__doc__)
+        for message in markers.warnings:
+            report_warning(self, message)
+        for message in markers.errors:
+            report_error(self, message)
+
         section = make_section(self, flow.name or type(flow).__name__)
 
         fields = [("Entrypoint", self.entrypoint(flow))]
@@ -46,7 +61,14 @@ class PrefectFlowDirective(SphinxDirective):
         fields.append(("Signature", str(inspect.signature(flow.fn))))
         add_field_list(section, fields)
 
-        description = flow.description
+        if "description-from" in self.options:
+            description = read_description_file(
+                self,
+                self.options["description-from"],
+            )
+        else:
+            description = default_description(flow, markers)
+
         if description:
             render_rst(self, section, inspect.cleandoc(description))
 

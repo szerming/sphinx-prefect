@@ -21,3 +21,8 @@ def report_error(directive: SphinxDirective, message: str) -> None:
         prefix = f"{source}:{line}: " if source else ""
         raise SphinxError(f"{prefix}{message}")
     logger.warning(message, location=location)
+
+
+def report_warning(directive: SphinxDirective, message: str) -> None:
+    """Emit a warning regardless of ``prefect_on_error``."""
+    logger.warning(message, location=directive.get_source_info())

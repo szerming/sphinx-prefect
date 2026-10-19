@@ -32,14 +32,18 @@ src/sphinxcontrib/prefect/
 ├── __init__.py       # setup(), config registration, directive registration
 ├── _directives.py    # directive classes and flow rendering
 ├── _import.py        # lazy module/flow resolution
+├── _markers.py       # main-flow docstring marker parsing
+├── _description.py   # docstring and external-file description resolution
 ├── _render.py        # shared doctree/section helpers
 └── _errors.py        # prefect_on_error handling and source-located diagnostics
 
 tests/
 ├── conftest.py
 ├── roots/
-│   └── test-flow/    # Sphinx test root and fixture flow package
-└── test_*.py
+│   └── test-flow/    # Sphinx test root, fixture flows, external descriptions
+├── test_flow_directive.py
+├── test_markers.py
+└── test_package.py
 
 docs/
 ├── adr/              # architecture decision records
@@ -92,6 +96,24 @@ directive needs a namespaced id.
 Build shared doctree behavior in `_render.py` instead of duplicating node
 construction in directives.
 
+### Descriptions and markers
+
+`_markers.parse_mainflow_markers()` is a pure parser: it returns selection
+state plus separate `warnings` (conflicts) and `errors` (malformed syntax).
+Callers route `errors` through `report_error()`; conflicts use
+`report_warning()` because they stay warnings under strict mode.
+
+Keep marker parsing in `_markers.py` so the module scan can reuse it without
+depending on a directive. Marker syntax is only parsed from the raw docstring
+(`flow.fn.__doc__`); an explicit `flow.description` is rendered as written.
+
+Resolve external descriptions in `_description.py`:
+
+- paths are relative to `directive.env.srcdir`;
+- external files replace the docstring description;
+- successful reads call `env.note_dependency()`;
+- missing/unreadable files and unsupported formats follow `prefect_on_error`.
+
 ### Error policy
 
 Recoverable failures go through `_errors.report_error()`:
@@ -130,9 +152,16 @@ roots as `tests/roots/test-<name>`.
 - `tests/roots/test-flow/` contains a fixture flow package with:
   - a flow with a description and version;
   - a flow without a description;
+  - flows using each main-flow marker form, including conflicts and malformed
+    frontmatter;
   - a task and a plain function for wrong-type coverage;
-  - a module that raises on import to guard setup-time imports.
-- Directive tests assert both doctree nodes and rendered HTML.
+  - a module that raises on import to guard setup-time imports;
+  - external RST and Markdown descriptions (excluded from the source scan).
+- `tests/test_markers.py` unit-tests marker forms, precedence, stripping, and
+  malformed YAML.
+- Directive tests assert both doctree nodes and rendered HTML. Description
+  tests cover overrides, missing files, and the not-yet-supported Markdown
+  path.
 - Error tests build a temporary copy of a test root so the same fixture package
   can be reused for warn and strict modes.
 
