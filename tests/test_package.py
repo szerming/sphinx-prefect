@@ -18,12 +18,26 @@ class FakeApp:
     def __init__(self) -> None:
         self.required_sphinx: list[str] = []
         self.extensions: list[str] = []
+        self.config_values: list[tuple[str, Any, str]] = []
+        self.directives: list[str] = []
 
     def require_sphinx(self, version: str) -> None:
         self.required_sphinx.append(version)
 
     def setup_extension(self, name: str) -> None:
         self.extensions.append(name)
+
+    def add_config_value(
+        self,
+        name: str,
+        default: Any,
+        rebuild: str,
+        types: Any = (),
+    ) -> None:
+        self.config_values.append((name, default, rebuild))
+
+    def add_directive(self, name: str, directive: Any) -> None:
+        self.directives.append(name)
 
 
 def test_setup_returns_extension_metadata() -> None:
@@ -47,6 +61,8 @@ def test_setup_requires_sphinx_9_and_dependencies() -> None:
         "sphinxcontrib.pydantic",
         "sphinxcontrib.mermaid",
     ]
+    assert app.config_values == [("prefect_on_error", "warn", "env")]
+    assert app.directives == ["prefect-flow"]
 
 
 def test_sphinxcontrib_is_a_namespace_package() -> None:
