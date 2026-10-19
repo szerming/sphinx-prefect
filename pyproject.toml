@@ -1,7 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "sphinx-contrib-prefect"
-version = "0.1.0"
-description = "Add your description here"
+dynamic = ["version"]
+description = "A Sphinx extension for documenting Prefect flows, tasks, and subflows."
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = []
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "sphinx>=9,<10",
+    "prefect>=3,<4",
+    "pydantic>=2.10,<3",
+    "sphinxcontrib-mermaid>=2.1,<3",
+    "sphinxcontrib-pydantic>=0.4,<0.5",
+]
+
+[project.optional-dependencies]
+markdown = ["myst-parser>=5,<6"]
+
+[dependency-groups]
+dev = [
+    "beautifulsoup4>=4.13,<5",
+    "pytest>=8,<9",
+    "ruff>=0.11,<1",
+]
+
+[tool.hatch.version]
+path = "src/sphinxcontrib/prefect/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+only-include = ["src/sphinxcontrib/prefect"]
+sources = ["src"]
+dev-mode-dirs = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["B", "E", "F", "I", "RUF", "SIM", "UP"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra"

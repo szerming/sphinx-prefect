@@ -5,6 +5,20 @@ build/
 dist/
 wheels/
 *.egg-info
+*.egg
 
-# Virtual environments
+# Virtual environments and tool caches
 .venv
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Sphinx build output
+_build/
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store
