@@ -11,6 +11,8 @@ from sphinx.util.docutils import SphinxDirective
 
 from sphinxcontrib.prefect._description import (
     read_description_file,
+    render_external_description,
+    render_rst_description,
     resolve_flow_description,
 )
 from sphinxcontrib.prefect._errors import report_error, report_warning
@@ -20,7 +22,6 @@ from sphinxcontrib.prefect._render import (
     add_field_list,
     make_section,
     render_directive_content,
-    render_rst,
 )
 
 if TYPE_CHECKING:
@@ -62,15 +63,16 @@ class PrefectFlowDirective(SphinxDirective):
         add_field_list(section, fields)
 
         if "description-from" in self.options:
-            description = read_description_file(
+            description_file = read_description_file(
                 self,
                 self.options["description-from"],
             )
+            if description_file is not None:
+                render_external_description(self, section, description_file)
         else:
             description = resolve_flow_description(flow, markers)
-
-        if description:
-            render_rst(self, section, inspect.cleandoc(description))
+            if description:
+                render_rst_description(self, section, description)
 
         if self.content:
             render_directive_content(self, section)

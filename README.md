@@ -9,9 +9,10 @@ runtime Mermaid generation, so no Prefect server or network access is required
 for self-contained flows.
 
 **Status:** v0.1 is in development. The package scaffold, the core
-`prefect-flow` directive, main-flow docstring markers, and external RST
-descriptions are implemented. The remaining work is tracked in
-issues [#4–#10](https://github.com/szerming/sphinx-prefect/issues).
+`prefect-flow` directive, main-flow docstring markers, external RST
+descriptions, and optional MyST Markdown descriptions are implemented. The
+remaining work is tracked in
+issues [#5–#10](https://github.com/szerming/sphinx-prefect/issues).
 
 ## Project context
 
@@ -41,13 +42,15 @@ Read these before changing behavior or architecture:
 pip install sphinx-contrib-prefect
 ```
 
-For MyST Markdown external descriptions (planned for
-[#4](https://github.com/szerming/sphinx-prefect/issues/4)), install the
-`markdown` extra:
+For MyST Markdown external descriptions, install the `markdown` extra:
 
 ```bash
 pip install "sphinx-contrib-prefect[markdown]"
 ```
+
+The core package does not depend on MyST. Without the extra, `.md` and
+`.markdown` description files warn and are omitted (or fail the build under
+`prefect_on_error = "error"`).
 
 ## Quick start
 
@@ -82,9 +85,15 @@ Use an external RST file when the description outgrows the docstring:
 ```
 
 The path is resolved relative to the Sphinx source directory (the directory
-containing `conf.py`). Docstrings may also carry a main-flow marker
-(`@mainflow`, YAML frontmatter, or `:mainflow:`); marker syntax is stripped
-from the rendered description. Markers will drive `prefect-flow-index` once
+containing `conf.py`). `.rst` files are parsed as reStructuredText. With the
+`markdown` extra installed, `.md` and `.markdown` files are parsed as MyST
+Markdown, so headings, lists, code blocks, links, and inline markup work.
+Docstrings always remain reStructuredText; Markdown applies only to external
+files. See the [usage guide](docs/guide.md#descriptions) for the format rules.
+
+Docstrings may also carry a main-flow marker (`@mainflow`, YAML frontmatter, or
+`:mainflow:`); marker syntax is stripped from the rendered description. Markers
+will drive `prefect-flow-index` once
 issue [#5](https://github.com/szerming/sphinx-prefect/issues/5) lands.
 
 The planned v0.1 interface also includes `prefect-params`, `prefect-dag`, and

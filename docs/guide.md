@@ -15,13 +15,13 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | Flow title, entrypoint, version, signature, and RST description | Available |
 | Directive body content appended after the description | Available |
 | External RST descriptions with `:description-from:` | Available |
+| External MyST Markdown descriptions (opt-in extra) | Available |
 | Main-flow docstring markers and stripping | Available (consumed by [#5](https://github.com/szerming/sphinx-prefect/issues/5)) |
 | `prefect_on_error` warn/error policy | Available |
 | Parameter tables and Pydantic model sections | Planned — [#6](https://github.com/szerming/sphinx-prefect/issues/6) |
 | Runtime Mermaid flow graph | Planned — [#7](https://github.com/szerming/sphinx-prefect/issues/7) |
 | Subflow/task sections and cross-references | Planned — [#8](https://github.com/szerming/sphinx-prefect/issues/8) |
 | Module scanning with `prefect-flow-index` | Planned — [#5](https://github.com/szerming/sphinx-prefect/issues/5) |
-| External MyST Markdown descriptions | Planned — [#4](https://github.com/szerming/sphinx-prefect/issues/4) |
 
 ## Installation
 
@@ -29,12 +29,14 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 pip install sphinx-contrib-prefect
 ```
 
-Install the `markdown` extra if you plan to use MyST Markdown descriptions once
-that feature lands in [#4](https://github.com/szerming/sphinx-prefect/issues/4):
+Install the `markdown` extra to use MyST Markdown descriptions:
 
 ```bash
 pip install "sphinx-contrib-prefect[markdown]"
 ```
+
+The extra is optional. Projects that only use RST docstrings and `.rst`
+description files do not need it.
 
 Supported versions: Python 3.12–3.14, Sphinx 9.x, Prefect 3.x, and Pydantic 2.x.
 
@@ -192,13 +194,40 @@ Use an external file to keep long descriptions out of the docstring:
    :description-from: descriptions/eda.rst
 ```
 
+To write the description in Markdown, install the `markdown` extra and point
+`:description-from:` at a `.md` or `.markdown` file:
+
+```rst
+.. prefect-flow:: flows.eda
+   :description-from: descriptions/eda.md
+```
+
+```markdown
+# EDA pipeline
+
+The flow extracts a sample and loads it unless `dry_run` is true.
+
+- reproducible with a seed
+- safe to rerun
+
+See [the Prefect docs](https://docs.prefect.io/) for details.
+```
+
+The format is chosen by file extension:
+
+- `.rst` files are parsed as reStructuredText.
+- `.md` and `.markdown` files are parsed as MyST Markdown when `myst-parser`
+  is installed. Headings, lists, code blocks, links, and inline markup render
+  as normal Sphinx content. Headings nest beneath the generated flow section.
+- Docstrings are always reStructuredText, even if they contain Markdown-like
+  syntax. Markdown applies to external files only.
+- If a Markdown file is used without the extra, the build warns and omits the
+  description. The warning names `sphinx-contrib-prefect[markdown]`, and under
+  `prefect_on_error = "error"` the same message fails the build.
 - The path is resolved relative to the Sphinx source directory (the directory
   containing `conf.py`), not the current document.
-- `.rst` files are parsed as reStructuredText and are registered as build
-  dependencies.
-- `.md` and `.markdown` files are planned for
-  [#4](https://github.com/szerming/sphinx-prefect/issues/4). Until then they
-  produce a warning (or an error under `prefect_on_error = "error"`).
+- Successful reads are registered as build dependencies, so editing the
+  description rebuilds the page.
 - A missing file follows `prefect_on_error` and renders no description.
 
 The external file replaces the docstring description. The directive body is
@@ -278,6 +307,7 @@ Typical causes are:
 - the entrypoint has a typo;
 - the directive points at a `@task` or a plain function instead of a `@flow`;
 - a `:description-from:` path does not exist or cannot be read;
+- a `.md` description is used without the `markdown` extra;
 - a docstring marker has malformed YAML or an invalid value.
 
 ## Current limitations and safety
@@ -286,8 +316,8 @@ Typical causes are:
   scanning are tracked in the
   [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
 - Docstrings and external `.rst` files are treated as reStructuredText.
-  External MyST Markdown descriptions are planned for
-  [#4](https://github.com/szerming/sphinx-prefect/issues/4).
+  External Markdown descriptions are opt-in through the `markdown` extra and
+  are parsed as MyST; MyST docstrings are not supported.
 - Main-flow markers are parsed and stripped, but automatic module scanning is
   not implemented until
   [#5](https://github.com/szerming/sphinx-prefect/issues/5). Use an explicit

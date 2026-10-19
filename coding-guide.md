@@ -114,9 +114,14 @@ Resolve external descriptions in `_description.py`:
 - paths are relative to `directive.env.srcdir`;
 - external files replace the docstring description;
 - `.rst` (and other non-Markdown files) are parsed as reStructuredText;
+- `.md`/`.markdown` files are parsed with MyST's `SphinxRenderer`; import
+  `myst_parser` lazily so the core package does not depend on the extra;
 - successful reads call `env.note_dependency()`;
-- missing/unreadable files and Markdown files (`.md`/`.markdown`, until ticket
-  #4) follow `prefect_on_error`.
+- missing/unreadable files and Markdown files without `myst-parser` install
+  follow `prefect_on_error`.
+
+Docstrings are always reStructuredText. Do not auto-detect Markdown in a
+docstring, and do not pass Markdown through `inspect.cleandoc`.
 
 ### Error policy
 
@@ -164,8 +169,10 @@ roots as `tests/roots/test-<name>`.
 - `tests/test_markers.py` unit-tests marker forms, precedence, stripping, and
   malformed YAML.
 - Directive tests assert both doctree nodes and rendered HTML. Description
-  tests cover overrides, missing files, and the not-yet-supported Markdown
-  path.
+  tests cover overrides, missing files, MyST rendering when `myst-parser` is
+  installed, and the missing-parser warn/error paths. The MyST happy-path test
+  is skipped when the `markdown` extra is absent; CI runs the extra in a
+  dedicated job.
 - Error tests build a temporary copy of a test root so the same fixture package
   can be reused for warn and strict modes.
 

@@ -90,6 +90,14 @@ def indented_field_literal() -> None:
     """
 
 
+@flow
+def markdown_looking_docstring() -> None:
+    """Run a flow whose docstring looks like Markdown.
+
+    # This is a docstring, not a Markdown heading
+    """
+
+
 @task
 def not_a_flow() -> None:
     """A task, which is not a flow."""

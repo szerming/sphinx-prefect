@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,15 @@ def build(make_app: Any, src: Path) -> Any:
     )
     app.build()
     return app
+
+
+def hide_myst(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make MyST unavailable, whether or not the extra is installed."""
+    if importlib.util.find_spec("myst_parser") is not None:
+        monkeypatch.setattr(
+            "sphinxcontrib.prefect._description._load_myst",
+            lambda: None,
+        )
 
 
 def find_section(doctree: nodes.document, title: str) -> nodes.section | None:
@@ -436,37 +446,104 @@ def test_missing_description_file_raises_in_strict_mode(
         app.build()
 
 
-def test_markdown_description_warns_that_myst_is_required(
+def test_docstrings_remain_restructured_text(
     make_app: Any,
     tmp_path: Path,
 ) -> None:
     src = make_src(
         tmp_path,
-        "Markdown\n========\n\n"
-        ".. prefect-flow:: fixture_pkg.flows.main\n"
-        "   :description-from: description.md\n",
+        "Docstring\n=========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.markdown_looking_docstring\n",
     )
 
     app = build(make_app, src)
 
     assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    doctree = app.env.get_doctree("index")
+    assert find_section(doctree, "This is a docstring, not a Markdown heading") is None
+    section = find_section(doctree, "markdown-looking-docstring")
+    assert section is not None
+    assert "# This is a docstring, not a Markdown heading" in section.astext()
+
+
+MARKDOWN_PAGE = (
+    "Markdown\n========\n\n"
+    ".. prefect-flow:: fixture_pkg.flows.main\n"
+    "   :description-from: description.md\n"
+)
+
+
+def test_markdown_description_renders_with_myst(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("myst_parser")
+    src = make_src(tmp_path, MARKDOWN_PAGE)
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    doctree = app.env.get_doctree("index")
+    section = find_section(doctree, "main")
+    assert section is not None
+    assert "This description is written in Markdown with strong text." in (
+        section.astext()
+    )
+    assert find_section(doctree, "Markdown description") is not None
+    assert find_section(doctree, "Details") is not None
+
+    bullet_list = list(section.findall(nodes.bullet_list))
+    assert len(bullet_list) == 1
+    items = [item.astext() for item in bullet_list[0].findall(nodes.list_item)]
+    assert items == ["first item", "second item with a link."]
+
+    links = list(section.findall(nodes.reference))
+    assert [link["refuri"] for link in links] == ["https://www.prefect.io"]
+
+    literal_blocks = list(section.findall(nodes.literal_block))
+    assert [block.astext().strip() for block in literal_blocks] == ['print("hello")']
+
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert 'id="markdown-description"' in html
+    assert 'id="details"' in html
+    assert "<li><p>first item</p></li>" in html
+    assert 'href="https://www.prefect.io"' in html
+    assert "<strong>strong</strong>" in html
+    assert any(
+        str(path).endswith("description.md") for path in app.env.dependencies["index"]
+    )
+
+
+def test_markdown_description_warns_when_myst_is_missing(
+    make_app: Any,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hide_myst(monkeypatch)
+    src = make_src(tmp_path, MARKDOWN_PAGE)
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
     warnings = app.warning.getvalue()
-    assert "MyST" in warnings
+    assert "sphinx-contrib-prefect[markdown]" in warnings
     assert "index.rst" in warnings
     section = find_section(app.env.get_doctree("index"), "main")
     assert section is not None
     assert "Run the main fixture flow." not in section.astext()
 
 
-def test_markdown_description_raises_in_strict_mode(
+def test_markdown_description_raises_when_myst_is_missing_in_strict_mode(
     make_app: Any,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    hide_myst(monkeypatch)
     src = make_src(
         tmp_path,
-        "Markdown\n========\n\n"
-        ".. prefect-flow:: fixture_pkg.flows.main\n"
-        "   :description-from: description.md\n",
+        MARKDOWN_PAGE,
         config='prefect_on_error = "error"',
     )
 
@@ -477,7 +554,7 @@ def test_markdown_description_raises_in_strict_mode(
         warningiserror=False,
     )
 
-    with pytest.raises(SphinxError, match="Markdown description files"):
+    with pytest.raises(SphinxError, match=r"sphinx-contrib-prefect\[markdown\]"):
         app.build()
 
 
