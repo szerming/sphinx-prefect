@@ -104,15 +104,19 @@ Callers route `errors` through `report_error()`; conflicts use
 `report_warning()` because they stay warnings under strict mode.
 
 Keep marker parsing in `_markers.py` so the module scan can reuse it without
-depending on a directive. Marker syntax is only parsed from the raw docstring
-(`flow.fn.__doc__`); an explicit `flow.description` is rendered as written.
+depending on a directive. Marker syntax is parsed from the raw docstring
+(`flow.fn.__doc__`); when the description comes from that docstring, the
+marker-stripped text is rendered. An explicit description that differs from
+the docstring is rendered unchanged.
 
 Resolve external descriptions in `_description.py`:
 
 - paths are relative to `directive.env.srcdir`;
 - external files replace the docstring description;
+- `.rst` (and other non-Markdown files) are parsed as reStructuredText;
 - successful reads call `env.note_dependency()`;
-- missing/unreadable files and unsupported formats follow `prefect_on_error`.
+- missing/unreadable files and `.md` files (until ticket #4) follow
+  `prefect_on_error`.
 
 ### Error policy
 

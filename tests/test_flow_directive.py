@@ -168,6 +168,11 @@ def test_mainflow_markers_are_stripped_from_descriptions(
     assert ":mainflow:" not in text
     assert "mainflow: true" not in text
 
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert description in html
+    assert "@mainflow" not in html
+    assert ":mainflow:" not in html
+
 
 def test_conflicting_markers_warn_and_still_render(
     make_app: Any,
@@ -188,6 +193,23 @@ def test_conflicting_markers_warn_and_still_render(
     section = find_section(app.env.get_doctree("index"), "conflicting-markers")
     assert section is not None
     assert "Run a flow with conflicting markers." in section.astext()
+
+
+def test_conflicting_markers_stay_warnings_in_strict_mode(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Conflict\n========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.conflicting_markers\n",
+        config='prefect_on_error = "error"',
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert "Conflicting main-flow markers" in app.warning.getvalue()
 
 
 def test_explicit_description_does_not_contain_docstring_marker(
@@ -282,6 +304,38 @@ def test_description_from_rst_overrides_the_docstring(
     assert "file" in emphasis
     assert "reStructuredText" not in emphasis
 
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert "This description comes from an external <em>file</em>." in html
+    assert any(
+        str(path).endswith("description.rst") for path in app.env.dependencies["index"]
+    )
+
+
+def test_description_from_is_relative_to_the_source_directory(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Root\n====\n\n.. toctree::\n\n   nested/page\n",
+    )
+    nested = src / "nested"
+    nested.mkdir()
+    (nested / "page.rst").write_text(
+        "Nested page\n===========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.main\n"
+        "   :description-from: description.rst\n",
+        encoding="utf-8",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    section = find_section(app.env.get_doctree("nested/page"), "main")
+    assert section is not None
+    assert "This description comes from an external file." in section.astext()
+
 
 def test_missing_description_file_warns_and_omits_the_description(
     make_app: Any,
@@ -349,6 +403,29 @@ def test_markdown_description_warns_that_myst_is_required(
     section = find_section(app.env.get_doctree("index"), "main")
     assert section is not None
     assert "Run the main fixture flow." not in section.astext()
+
+
+def test_markdown_description_raises_in_strict_mode(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "Markdown\n========\n\n"
+        ".. prefect-flow:: fixture_pkg.flows.main\n"
+        "   :description-from: description.md\n",
+        config='prefect_on_error = "error"',
+    )
+
+    app = make_app(
+        "html",
+        srcdir=src,
+        builddir=src / "_build",
+        warningiserror=False,
+    )
+
+    with pytest.raises(SphinxError, match="Markdown description files"):
+        app.build()
 
 
 @pytest.mark.parametrize(

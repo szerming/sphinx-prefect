@@ -244,7 +244,8 @@ Rules:
 - YAML frontmatter is parsed only at the start of the docstring.
   `mainflow: true` selects the flow; `mainflow: false` does not.
 - `:mainflow:` and `:mainflow: true` select the flow; `:mainflow: false` does
-  not.
+  not. The field must be at the top level of the docstring; an indented
+  `:mainflow:` inside a literal block is not a marker.
 - Any true marker wins over a false marker, and the conflict emits a warning.
 - All marker syntax is stripped from the rendered description.
 - Explicit selection with `.. prefect-flow::` always wins. Markers will drive

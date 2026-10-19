@@ -9,7 +9,9 @@ from dataclasses import dataclass
 import yaml
 
 _AT_MAINFLOW = re.compile(r"^\s*@mainflow\s*$")
-_MAINFLOW_FIELD = re.compile(r"^\s*:mainflow:\s*(?P<value>.*?)\s*$")
+_MAINFLOW_FIELD = re.compile(r"^:mainflow:\s*(?P<value>.*?)\s*$")
+_FRONTMATTER_LINE = re.compile(r"^\s*(?:[A-Za-z_][\w-]*\s*:|-\s+)")
+_FRONTMATTER_ERROR = "Malformed main-flow frontmatter: "
 
 
 @dataclass(frozen=True)
@@ -81,10 +83,17 @@ def _strip_frontmatter(text: str) -> tuple[list[str], bool | None, list[str]]:
         None,
     )
     if closing is None:
+        index = 1
+        while (
+            index < len(lines)
+            and lines[index].strip()
+            and _FRONTMATTER_LINE.match(lines[index])
+        ):
+            index += 1
         return (
-            lines[1:],
+            lines[index:],
             None,
-            ["Malformed main-flow frontmatter: missing closing '---'."],
+            [f"{_FRONTMATTER_ERROR}missing closing '---'."],
         )
 
     body = "\n".join(lines[1:closing])
@@ -96,7 +105,7 @@ def _strip_frontmatter(text: str) -> tuple[list[str], bool | None, list[str]]:
         data = yaml.safe_load(body)
     except yaml.YAMLError as exc:
         problem = getattr(exc, "problem", str(exc))
-        return remaining, None, [f"Malformed main-flow frontmatter: {problem}"]
+        return remaining, None, [f"{_FRONTMATTER_ERROR}{problem}"]
 
     if data is None:
         return remaining, None, []
@@ -104,7 +113,7 @@ def _strip_frontmatter(text: str) -> tuple[list[str], bool | None, list[str]]:
         return (
             remaining,
             None,
-            ["Malformed main-flow frontmatter: expected a YAML mapping."],
+            [f"{_FRONTMATTER_ERROR}expected a YAML mapping."],
         )
 
     value = data.get("mainflow")
@@ -117,5 +126,5 @@ def _strip_frontmatter(text: str) -> tuple[list[str], bool | None, list[str]]:
     return (
         remaining,
         None,
-        ["Malformed main-flow frontmatter: 'mainflow' must be true or false."],
+        [f"{_FRONTMATTER_ERROR}'mainflow' must be true or false."],
     )

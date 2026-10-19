@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from sphinxcontrib.prefect._markers import MarkerResult
 
 
-def default_description(flow: Flow, markers: MarkerResult) -> str | None:
+def resolve_flow_description(flow: Flow, markers: MarkerResult) -> str | None:
     """Return *flow*'s description with docstring marker syntax removed."""
     docstring = inspect.getdoc(flow.fn)
     if docstring is not None and flow.description == docstring:
@@ -38,8 +38,9 @@ def read_description_file(
     if source.suffix.lower() == ".md":
         report_error(
             directive,
-            "Markdown description files require MyST support; install "
-            "'sphinx-contrib-prefect[markdown]'.",
+            "Markdown description files are not supported yet (see issue #4); "
+            "install 'sphinx-contrib-prefect[markdown]' to use MyST once "
+            "supported.",
         )
         return None
 

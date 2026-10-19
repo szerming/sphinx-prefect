@@ -10,8 +10,8 @@ from docutils.parsers.rst import directives
 from sphinx.util.docutils import SphinxDirective
 
 from sphinxcontrib.prefect._description import (
-    default_description,
     read_description_file,
+    resolve_flow_description,
 )
 from sphinxcontrib.prefect._errors import report_error, report_warning
 from sphinxcontrib.prefect._import import ObjectResolutionError, resolve_flow
@@ -67,7 +67,7 @@ class PrefectFlowDirective(SphinxDirective):
                 self.options["description-from"],
             )
         else:
-            description = default_description(flow, markers)
+            description = resolve_flow_description(flow, markers)
 
         if description:
             render_rst(self, section, inspect.cleandoc(description))

@@ -103,6 +103,20 @@ def test_malformed_yaml_is_reported() -> None:
     assert "mainflow" not in result.description
 
 
+def test_missing_frontmatter_closing_delimiter_is_reported_and_stripped() -> None:
+    docstring = """---
+    mainflow: true
+    Run the flow.
+    """
+
+    result = parse_mainflow_markers(docstring)
+
+    assert result.is_main_flow is False
+    assert len(result.errors) == 1
+    assert "missing closing" in result.errors[0]
+    assert result.description == "Run the flow."
+
+
 def test_yaml_mainflow_must_be_boolean() -> None:
     docstring = """---
     mainflow: sometimes
@@ -148,6 +162,20 @@ def test_invalid_rst_field_value_is_reported() -> None:
     assert len(result.errors) == 1
     assert "true or false" in result.errors[0]
     assert result.description == "Run the flow."
+
+
+def test_indented_field_in_literal_block_is_not_a_marker() -> None:
+    docstring = """Run the flow.
+
+    Example::
+
+        :mainflow: true
+    """
+
+    result = parse_mainflow_markers(docstring)
+
+    assert result.is_main_flow is False
+    assert ":mainflow: true" in result.description
 
 
 def test_true_marker_wins_over_false_marker_with_a_warning() -> None:

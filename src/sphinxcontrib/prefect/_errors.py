@@ -15,12 +15,11 @@ logger = logging.getLogger(__name__)
 
 def report_error(directive: SphinxDirective, message: str) -> None:
     """Report a recoverable failure according to ``prefect_on_error``."""
-    location = directive.get_source_info()
     if directive.config.prefect_on_error == "error":
-        source, line = location
+        source, line = directive.get_source_info()
         prefix = f"{source}:{line}: " if source else ""
         raise SphinxError(f"{prefix}{message}")
-    logger.warning(message, location=location)
+    report_warning(directive, message)
 
 
 def report_warning(directive: SphinxDirective, message: str) -> None:
