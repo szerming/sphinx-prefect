@@ -2,14 +2,26 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import TYPE_CHECKING
 
 from docutils import nodes
+
+from sphinxcontrib.prefect._description import (
+    read_description_file,
+    render_external_description,
+    render_rst_description,
+    resolve_flow_description,
+)
+from sphinxcontrib.prefect._import import flow_entrypoint
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
     from sphinx.util.docutils import SphinxDirective
+
+    from prefect import Flow
+    from sphinxcontrib.prefect._markers import MarkerResult
 
 
 def make_section(
@@ -45,18 +57,47 @@ def add_field_list(
     return field_list
 
 
-def render_rst(
-    directive: SphinxDirective,
-    section: nodes.Element,
-    text: str,
-) -> None:
-    """Parse RST *text* and append the resulting nodes to *section*."""
-    section.extend(directive.parse_text_to_nodes(text, allow_section_headings=True))
-
-
 def render_directive_content(
     directive: SphinxDirective,
     section: nodes.Element,
 ) -> None:
     """Parse the directive body and append it to *section*."""
     section.extend(directive.parse_content_to_nodes(allow_section_headings=True))
+
+
+def flow_node_id(flow: Flow) -> str:
+    """Return a stable, unique section id for *flow*."""
+    return nodes.make_id(f"prefect-flow-{flow_entrypoint(flow)}")
+
+
+def render_flow_section(
+    directive: SphinxDirective,
+    flow: Flow,
+    markers: MarkerResult,
+    *,
+    description_from: str | None = None,
+    node_id: str | None = None,
+) -> nodes.section:
+    """Render the ``prefect-flow`` section for *flow*."""
+    section = make_section(
+        directive,
+        flow.name or type(flow).__name__,
+        node_id=node_id,
+    )
+
+    fields = [("Entrypoint", flow_entrypoint(flow))]
+    if flow.version is not None:
+        fields.append(("Version", str(flow.version)))
+    fields.append(("Signature", str(inspect.signature(flow.fn))))
+    add_field_list(section, fields)
+
+    if description_from is not None:
+        description_file = read_description_file(directive, description_from)
+        if description_file is not None:
+            render_external_description(directive, section, description_file)
+    else:
+        description = resolve_flow_description(flow, markers)
+        if description:
+            render_rst_description(directive, section, description)
+
+    return section

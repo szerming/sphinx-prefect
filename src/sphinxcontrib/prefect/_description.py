@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 from sphinxcontrib.prefect._errors import report_error
-from sphinxcontrib.prefect._render import render_rst
 
 if TYPE_CHECKING:
     from docutils import nodes
@@ -100,7 +99,12 @@ def render_rst_description(
     text: str,
 ) -> None:
     """Render a reStructuredText description in *section*."""
-    render_rst(directive, section, inspect.cleandoc(text))
+    section.extend(
+        directive.parse_text_to_nodes(
+            inspect.cleandoc(text),
+            allow_section_headings=True,
+        )
+    )
 
 
 def _load_myst() -> _MystBindings | None:

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sphinxcontrib.prefect._directives import PrefectFlowDirective
+from sphinxcontrib.prefect._directives import (
+    PrefectFlowDirective,
+    PrefectFlowIndexDirective,
+)
 
 if TYPE_CHECKING:
     from sphinx.application import Sphinx
@@ -19,8 +22,11 @@ def setup(app: Sphinx) -> dict[str, Any]:
     app.setup_extension("sphinxcontrib.pydantic")
     app.setup_extension("sphinxcontrib.mermaid")
 
+    app.add_config_value("prefect_modules", [], "env", types=list)
+    app.add_config_value("prefect_main_flows", [], "env", types=list)
     app.add_config_value("prefect_on_error", "warn", "env", types=str)
     app.add_directive("prefect-flow", PrefectFlowDirective)
+    app.add_directive("prefect-flow-index", PrefectFlowIndexDirective)
 
     return {
         "version": __version__,

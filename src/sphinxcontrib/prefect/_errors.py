@@ -8,6 +8,8 @@ from sphinx.errors import SphinxError
 from sphinx.util import logging
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from sphinx.util.docutils import SphinxDirective
 
 logger = logging.getLogger(__name__)
@@ -25,3 +27,16 @@ def report_error(directive: SphinxDirective, message: str) -> None:
 def report_warning(directive: SphinxDirective, message: str) -> None:
     """Emit a warning regardless of ``prefect_on_error``."""
     logger.warning(message, location=directive.get_source_info())
+
+
+def report_diagnostics(
+    directive: SphinxDirective,
+    *,
+    warnings: Iterable[str] = (),
+    errors: Iterable[str] = (),
+) -> None:
+    """Route collected warnings and errors through the configured policy."""
+    for message in warnings:
+        report_warning(directive, message)
+    for message in errors:
+        report_error(directive, message)

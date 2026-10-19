@@ -61,8 +61,12 @@ def test_setup_requires_sphinx_9_and_dependencies() -> None:
         "sphinxcontrib.pydantic",
         "sphinxcontrib.mermaid",
     ]
-    assert app.config_values == [("prefect_on_error", "warn", "env")]
-    assert app.directives == ["prefect-flow"]
+    assert app.config_values == [
+        ("prefect_modules", [], "env"),
+        ("prefect_main_flows", [], "env"),
+        ("prefect_on_error", "warn", "env"),
+    ]
+    assert app.directives == ["prefect-flow", "prefect-flow-index"]
 
 
 def test_sphinxcontrib_is_a_namespace_package() -> None:

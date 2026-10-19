@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any
 
 import pytest
 from docutils import nodes
+from helpers import build, copy_test_root, create_app, find_section
 from sphinx.errors import SphinxError
 
 from sphinxcontrib.prefect._import import ObjectResolutionError, split_entrypoint
@@ -20,29 +20,7 @@ ROOT = Path(__file__).parent / "roots" / "test-flow"
 
 def make_src(tmp_path: Path, body: str, *, config: str = "") -> Path:
     """Copy the flow test root and replace its index page."""
-    src = tmp_path / "src"
-    shutil.copytree(
-        ROOT,
-        src,
-        ignore=shutil.ignore_patterns("_build", "__pycache__"),
-    )
-    (src / "index.rst").write_text(body, encoding="utf-8")
-    if config:
-        with (src / "conf.py").open("a", encoding="utf-8") as conf:
-            conf.write(f"\n{config}\n")
-    return src
-
-
-def build(make_app: Any, src: Path) -> Any:
-    """Build *src* with the HTML builder and return the test app."""
-    app = make_app(
-        "html",
-        srcdir=src,
-        builddir=src / "_build",
-        warningiserror=False,
-    )
-    app.build()
-    return app
+    return copy_test_root(ROOT, tmp_path, body, config=config)
 
 
 def hide_myst(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -52,15 +30,6 @@ def hide_myst(monkeypatch: pytest.MonkeyPatch) -> None:
             "sphinxcontrib.prefect._description._load_myst",
             lambda: None,
         )
-
-
-def find_section(doctree: nodes.document, title: str) -> nodes.section | None:
-    """Return the section whose title is *title*, if present."""
-    for section in doctree.findall(nodes.section):
-        section_title = section.next_node(nodes.title)
-        if section_title is not None and section_title.astext() == title:
-            return section
-    return None
 
 
 @pytest.mark.sphinx("html", testroot="flow")
@@ -280,12 +249,7 @@ def test_malformed_frontmatter_raises_in_strict_mode(
         config='prefect_on_error = "error"',
     )
 
-    app = make_app(
-        "html",
-        srcdir=src,
-        builddir=src / "_build",
-        warningiserror=False,
-    )
+    app = create_app(make_app, src)
 
     with pytest.raises(SphinxError, match="Malformed main-flow frontmatter"):
         app.build()
@@ -435,12 +399,7 @@ def test_missing_description_file_raises_in_strict_mode(
         config='prefect_on_error = "error"',
     )
 
-    app = make_app(
-        "html",
-        srcdir=src,
-        builddir=src / "_build",
-        warningiserror=False,
-    )
+    app = create_app(make_app, src)
 
     with pytest.raises(SphinxError, match="Could not find description file"):
         app.build()
@@ -547,12 +506,7 @@ def test_markdown_description_raises_when_myst_is_missing_in_strict_mode(
         config='prefect_on_error = "error"',
     )
 
-    app = make_app(
-        "html",
-        srcdir=src,
-        builddir=src / "_build",
-        warningiserror=False,
-    )
+    app = create_app(make_app, src)
 
     with pytest.raises(SphinxError, match=r"sphinx-contrib-prefect\[markdown\]"):
         app.build()
@@ -608,12 +562,7 @@ def test_resolution_failures_raise_in_strict_mode(
         config='prefect_on_error = "error"',
     )
 
-    app = make_app(
-        "html",
-        srcdir=src,
-        builddir=src / "_build",
-        warningiserror=False,
-    )
+    app = create_app(make_app, src)
 
     with pytest.raises(SphinxError, match=message):
         app.build()

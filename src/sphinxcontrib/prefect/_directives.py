@@ -2,30 +2,25 @@
 
 from __future__ import annotations
 
-import inspect
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import Any, ClassVar
 
 from docutils import nodes
 from docutils.parsers.rst import directives
 from sphinx.util.docutils import SphinxDirective
 
-from sphinxcontrib.prefect._description import (
-    read_description_file,
-    render_external_description,
-    render_rst_description,
-    resolve_flow_description,
+from sphinxcontrib.prefect._errors import (
+    report_diagnostics,
+    report_error,
+    report_warning,
 )
-from sphinxcontrib.prefect._errors import report_error, report_warning
 from sphinxcontrib.prefect._import import ObjectResolutionError, resolve_flow
 from sphinxcontrib.prefect._markers import parse_mainflow_markers
 from sphinxcontrib.prefect._render import (
-    add_field_list,
-    make_section,
+    flow_node_id,
     render_directive_content,
+    render_flow_section,
 )
-
-if TYPE_CHECKING:
-    from prefect import Flow
+from sphinxcontrib.prefect._scan import scan_main_flows
 
 
 class PrefectFlowDirective(SphinxDirective):
@@ -45,41 +40,63 @@ class PrefectFlowDirective(SphinxDirective):
         except ObjectResolutionError as exc:
             report_error(self, str(exc))
             return []
-        return [self.render_flow(flow)]
 
-    def render_flow(self, flow: Flow) -> nodes.section:
         markers = parse_mainflow_markers(flow.fn.__doc__)
-        for message in markers.warnings:
-            report_warning(self, message)
-        for message in markers.errors:
-            report_error(self, message)
-
-        section = make_section(self, flow.name or type(flow).__name__)
-
-        fields = [("Entrypoint", self.entrypoint(flow))]
-        if flow.version is not None:
-            fields.append(("Version", str(flow.version)))
-        fields.append(("Signature", str(inspect.signature(flow.fn))))
-        add_field_list(section, fields)
-
-        if "description-from" in self.options:
-            description_file = read_description_file(
-                self,
-                self.options["description-from"],
-            )
-            if description_file is not None:
-                render_external_description(self, section, description_file)
-        else:
-            description = resolve_flow_description(flow, markers)
-            if description:
-                render_rst_description(self, section, description)
-
+        report_diagnostics(
+            self,
+            warnings=markers.warnings,
+            errors=markers.errors,
+        )
+        section = render_flow_section(
+            self,
+            flow,
+            markers,
+            description_from=self.options.get("description-from"),
+        )
         if self.content:
             render_directive_content(self, section)
+        return [section]
 
-        return section
 
-    @staticmethod
-    def entrypoint(flow: Flow) -> str:
-        """Return the importable entrypoint of *flow*."""
-        return f"{flow.fn.__module__}.{flow.fn.__qualname__}"
+class PrefectFlowIndexDirective(SphinxDirective):
+    """Render one flow section per main flow discovered in configured modules."""
+
+    required_arguments = 0
+    optional_arguments = 0
+    final_argument_whitespace = False
+    has_content = False
+    option_spec: ClassVar[dict[str, Any]] = {
+        "show-dag": directives.flag,
+        "no-dag": directives.flag,
+    }
+
+    def run(self) -> list[nodes.Node]:
+        result = scan_main_flows(
+            self.config.prefect_modules,
+            self.config.prefect_main_flows,
+        )
+
+        report_diagnostics(
+            self,
+            warnings=result.warnings,
+            errors=result.errors,
+        )
+
+        if not result.flows:
+            report_warning(
+                self,
+                "prefect-flow-index found no main flows; configure "
+                "prefect_modules or prefect_main_flows, or add a main-flow "
+                "docstring marker.",
+            )
+            return []
+
+        return [
+            render_flow_section(
+                self,
+                selection.flow,
+                selection.markers,
+                node_id=flow_node_id(selection.flow),
+            )
+            for selection in result.flows
+        ]

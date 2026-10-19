@@ -15,6 +15,10 @@ class ObjectResolutionError(Exception):
 
 def split_entrypoint(entrypoint: str) -> tuple[str, str]:
     """Split ``module.qualname`` or ``module:qualname`` into its parts."""
+    if not isinstance(entrypoint, str):
+        raise ObjectResolutionError(
+            f"Invalid flow entrypoint {entrypoint!r}; expected a string."
+        )
     entrypoint = entrypoint.strip()
     separator = ":" if ":" in entrypoint else "."
     module_name, found, attribute_path = entrypoint.rpartition(separator)
@@ -24,6 +28,17 @@ def split_entrypoint(entrypoint: str) -> tuple[str, str]:
             "expected 'module.qualname' or 'module:qualname'."
         )
     return module_name.strip(), attribute_path.strip()
+
+
+def normalize_entrypoint(entrypoint: str) -> str:
+    """Return *entrypoint* in canonical ``module.qualname`` form."""
+    module_name, attribute_path = split_entrypoint(entrypoint)
+    return f"{module_name}.{attribute_path}"
+
+
+def flow_entrypoint(flow: Flow) -> str:
+    """Return the canonical importable entrypoint of *flow*."""
+    return f"{flow.fn.__module__}.{flow.fn.__qualname__}"
 
 
 def resolve_flow(entrypoint: str) -> Flow:

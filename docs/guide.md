@@ -3,8 +3,9 @@
 This guide shows how to document Prefect flows in a Sphinx project with
 `sphinx-contrib-prefect`.
 
-The guide describes the currently implemented `prefect-flow` directive and
-marks features that are planned for the rest of v0.1. For the full design, see
+The guide describes the currently implemented `prefect-flow` and
+`prefect-flow-index` directives and marks features that are planned for the
+rest of v0.1. For the full design, see
 the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 
 ## Current status
@@ -16,12 +17,12 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | Directive body content appended after the description | Available |
 | External RST descriptions with `:description-from:` | Available |
 | External MyST Markdown descriptions (opt-in extra) | Available |
-| Main-flow docstring markers and stripping | Available (consumed by [#5](https://github.com/szerming/sphinx-prefect/issues/5)) |
+| Main-flow docstring markers and stripping | Available |
+| Module scanning with `prefect-flow-index` | Available |
 | `prefect_on_error` warn/error policy | Available |
 | Parameter tables and Pydantic model sections | Planned — [#6](https://github.com/szerming/sphinx-prefect/issues/6) |
 | Runtime Mermaid flow graph | Planned — [#7](https://github.com/szerming/sphinx-prefect/issues/7) |
 | Subflow/task sections and cross-references | Planned — [#8](https://github.com/szerming/sphinx-prefect/issues/8) |
-| Module scanning with `prefect-flow-index` | Planned — [#5](https://github.com/szerming/sphinx-prefect/issues/5) |
 
 ## Installation
 
@@ -111,6 +112,11 @@ extensions = [
 ]
 
 prefect_on_error = "warn"
+
+# Optional: modules scanned by prefect-flow-index, and flows that are main
+# flows without a docstring marker.
+prefect_modules = ["flows"]
+prefect_main_flows = ["flows.eda"]
 ```
 
 `sphinxcontrib.prefect` loads `sphinx.ext.autodoc`,
@@ -277,10 +283,55 @@ Rules:
   `:mainflow:` inside a literal block is not a marker.
 - Any true marker wins over a false marker, and the conflict emits a warning.
 - All marker syntax is stripped from the rendered description.
-- Explicit selection with `.. prefect-flow::` always wins. Markers will drive
-  automatic selection when `prefect-flow-index` lands in
-  [#5](https://github.com/szerming/sphinx-prefect/issues/5).
+- Explicit selection with `.. prefect-flow::` always wins. Markers drive
+  automatic selection in `prefect-flow-index`.
 - Malformed YAML or an invalid marker value follows `prefect_on_error`.
+
+## Indexing main flows
+
+`prefect-flow-index` scans configured modules and renders one
+`prefect-flow`-style section per selected flow on the current page. Configure
+the scan in `conf.py`:
+
+```python
+prefect_modules = ["flows", "more_flows"]
+prefect_main_flows = ["flows.eda", "reports.daily"]
+```
+
+Then place the directive on the index page:
+
+```rst
+Main flows
+==========
+
+.. prefect-flow-index::
+```
+
+A flow is selected when its docstring has a true main-flow marker or when its
+entrypoint appears in `prefect_main_flows`. Explicit entries are useful for
+flows you do not want to modify, including flows outside `prefect_modules`.
+
+The directive:
+
+- imports every module in `prefect_modules`;
+- inspects module-level attributes for Prefect `Flow` objects;
+- deduplicates selections by entrypoint;
+- renders sections in `prefect_modules` order, then attribute order;
+- appends explicit `prefect_main_flows` entries outside the scanned modules in
+  configuration order;
+- warns and renders nothing when no flows are selected.
+
+For example, with two marked flows and one unmarked flow in `flows`, only the
+two marked flows render. A flow named in both `prefect_main_flows` and a
+scanned module still renders once.
+
+The directive takes no arguments. The `:show-dag:` and `:no-dag:` options are
+accepted for forward compatibility; they will apply to every generated section
+once the runtime DAG lands in
+[#7](https://github.com/szerming/sphinx-prefect/issues/7).
+
+Module scanning imports user modules, so import-time side effects run during
+the build. Only point `prefect_modules` at modules that are safe to import.
 
 ## Error handling
 
@@ -308,20 +359,19 @@ Typical causes are:
 - the directive points at a `@task` or a plain function instead of a `@flow`;
 - a `:description-from:` path does not exist or cannot be read;
 - a `.md` description is used without the `markdown` extra;
-- a docstring marker has malformed YAML or an invalid value.
+- a docstring marker has malformed YAML or an invalid value;
+- a module in `prefect_modules` or a `prefect_main_flows` entry cannot be
+  imported or does not name a Prefect flow.
 
 ## Current limitations and safety
 
-- Parameter tables, Pydantic models, graphs, subflow/task sections, and module
-  scanning are tracked in the
-  [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
+- Parameter tables, Pydantic models, graphs, and subflow/task sections are
+  tracked in the [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
 - Docstrings and external `.rst` files are treated as reStructuredText.
   External Markdown descriptions are opt-in through the `markdown` extra and
   are parsed as MyST; MyST docstrings are not supported.
-- Main-flow markers are parsed and stripped, but automatic module scanning is
-  not implemented until
-  [#5](https://github.com/szerming/sphinx-prefect/issues/5). Use an explicit
-  `.. prefect-flow::` directive for now.
+- `prefect-flow-index` imports configured modules during the build. It does not
+  sandbox them, so import-time side effects are possible.
 - The directive imports the flow's module but does not execute the flow body.
   The planned runtime DAG feature will execute it when explicitly enabled; see
   [ADR-0001](adr/0001-runtime-prefect-dag.md).

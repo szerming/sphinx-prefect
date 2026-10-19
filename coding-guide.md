@@ -30,20 +30,24 @@ Apply formatting with `uv run ruff format .`.
 ```text
 src/sphinxcontrib/prefect/
 ├── __init__.py       # setup(), config registration, directive registration
-├── _directives.py    # directive classes and flow rendering
+├── _directives.py    # directive classes and option handling
 ├── _import.py        # lazy module/flow resolution
 ├── _markers.py       # main-flow docstring marker parsing
+├── _scan.py          # module scanning and main-flow selection
 ├── _description.py   # docstring and external-file description resolution
-├── _render.py        # shared doctree/section helpers
+├── _render.py        # doctree helpers and shared flow-section rendering
 └── _errors.py        # prefect_on_error handling and source-located diagnostics
 
 tests/
 ├── conftest.py
 ├── roots/
-│   └── test-flow/    # Sphinx test root, fixture flows, external descriptions
+│   ├── test-flow/    # flow directive, fixture flows, external descriptions
+│   └── test-index/   # module scan and prefect-flow-index
 ├── test_flow_directive.py
+├── test_index_directive.py
 ├── test_markers.py
-└── test_package.py
+├── test_package.py
+└── test_scan.py
 
 docs/
 ├── adr/              # architecture decision records
@@ -123,6 +127,24 @@ Resolve external descriptions in `_description.py`:
 Docstrings are always reStructuredText. Do not auto-detect Markdown in a
 docstring, and do not pass Markdown through `inspect.cleandoc`.
 
+### Module scanning
+
+`_scan.scan_main_flows()` imports `prefect_modules`, collects module-level
+`Flow` objects, and returns selected flows plus marker warnings and errors. It
+does not report diagnostics itself; the directive routes them through
+`report_diagnostics()` so they carry the directive location.
+
+Selection is by true marker or membership in `prefect_main_flows`. Keep these
+rules in `_scan.py`:
+
+- deduplicate by canonical flow entrypoint (`_import.flow_entrypoint()`);
+- preserve module order, then attribute order;
+- import explicit main flows outside the scanned modules afterwards, in config
+  order;
+- parse each flow's markers once, even when it appears in several modules or
+  under an alias;
+- never import Prefect or user modules until the directive runs.
+
 ### Error policy
 
 Recoverable failures go through `_errors.report_error()`:
@@ -136,6 +158,10 @@ report_error(self, "Could not import module 'pkg.flows'")
 - `prefect_on_error = "warn"` (default) logs a warning with the directive
   source location and lets the build continue.
 - `prefect_on_error = "error"` raises `SphinxError` and fails the build.
+
+Parsers and scan helpers return warnings and errors instead of reporting them.
+Directives route both collections through `_errors.report_diagnostics()` so
+every message carries the directive source location.
 
 Do not print to stdout or use generic exceptions for user errors.
 
@@ -166,8 +192,15 @@ roots as `tests/roots/test-<name>`.
   - a task and a plain function for wrong-type coverage;
   - a module that raises on import to guard setup-time imports;
   - external RST and Markdown descriptions (excluded from the source scan).
+- `tests/roots/test-index/` contains scanned modules, an explicit flow outside
+  them, unmarked flows, duplicate flow names, malformed markers, a wrong-type
+  object, and a module that raises on import.
 - `tests/test_markers.py` unit-tests marker forms, precedence, stripping, and
   malformed YAML.
+- `tests/test_scan.py` unit-tests scan order, explicit-flow inclusion,
+  deduplication, entrypoint normalization, and scan diagnostics.
+- `tests/test_index_directive.py` covers rendered order, selection, `:show-dag:`
+  and `:no-dag:`, empty scans, and warn/error behavior for scan failures.
 - Directive tests assert both doctree nodes and rendered HTML. Description
   tests cover overrides, missing files, MyST rendering when `myst-parser` is
   installed, and the missing-parser warn/error paths. The MyST happy-path test

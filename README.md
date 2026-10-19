@@ -9,17 +9,17 @@ runtime Mermaid generation, so no Prefect server or network access is required
 for self-contained flows.
 
 **Status:** v0.1 is in development. The package scaffold, the core
-`prefect-flow` directive, main-flow docstring markers, external RST
-descriptions, and optional MyST Markdown descriptions are implemented. The
-remaining work is tracked in
-issues [#5–#10](https://github.com/szerming/sphinx-prefect/issues).
+`prefect-flow` directive, main-flow docstring markers, external RST and MyST
+Markdown descriptions, and module scanning with `prefect-flow-index` are
+implemented. The remaining work is tracked in
+issues [#6–#10](https://github.com/szerming/sphinx-prefect/issues).
 
 ## Project context
 
 Read these before changing behavior or architecture:
 
-- **[Usage guide](docs/guide.md)** — complete examples for documenting a flow
-  with `prefect-flow`.
+- **[Usage guide](docs/guide.md)** — complete examples for documenting flows
+  with `prefect-flow` and `prefect-flow-index`.
 - **[v0.1 specification](docs/specs/0001-sphinx-prefect-v0.1.md)** — goals,
   behavior, compatibility, and the ticket map.
 - **[Architecture decision records](docs/adr/)** — accepted design decisions:
@@ -93,13 +93,33 @@ files. See the [usage guide](docs/guide.md#descriptions) for the format rules.
 
 Docstrings may also carry a main-flow marker (`@mainflow`, YAML frontmatter, or
 `:mainflow:`); marker syntax is stripped from the rendered description. Markers
-will drive `prefect-flow-index` once
-issue [#5](https://github.com/szerming/sphinx-prefect/issues/5) lands.
+drive flow selection in `prefect-flow-index`.
 
-The planned v0.1 interface also includes `prefect-params`, `prefect-dag`, and
-`prefect-flow-index`. See the [usage guide](docs/guide.md) for marker syntax,
-a complete project, error handling, current limitations, and the full planned
-interface.
+Configure one or more scanned modules in `conf.py`:
+
+```python
+prefect_modules = ["mypkg.flows"]
+prefect_main_flows = ["mypkg.flows.eda"]
+```
+
+Then render every selected main flow on the current page:
+
+```rst
+.. prefect-flow-index::
+```
+
+The index imports each configured module and renders one `prefect-flow`-style
+section per flow that has a true marker or an entry in `prefect_main_flows`.
+Flows are ordered by module list order and then attribute order; explicit
+flows outside `prefect_modules` follow in configuration order. Module scanning
+imports user code, so import-time side effects may run during the build.
+`:show-dag:` and `:no-dag:` are accepted for forward compatibility and will
+apply to every generated section when
+[#7](https://github.com/szerming/sphinx-prefect/issues/7) lands.
+
+The planned v0.1 interface also includes `prefect-params` and `prefect-dag`.
+See the [usage guide](docs/guide.md) for marker syntax, a complete project,
+error handling, current limitations, and the full planned interface.
 
 ## Development
 
