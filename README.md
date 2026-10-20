@@ -308,9 +308,11 @@ uv run sphinx-build -W -b html examples/demo examples/demo/_build/html
 
 CI builds both projects with `-W`, inspects the wheel and sdist, and installs
 the built wheel into a clean virtual environment before rebuilding the example.
-The [`Publish to PyPI`](.github/workflows/publish.yml) workflow is started
-manually from a `v*` tag, reruns those checks, and then waits for approval in
-the protected `pypi` GitHub environment before publishing. See the
+Every CI run also uploads the generated example HTML as the downloadable
+`example-html` artifact, so the rendered pages can be inspected without a local
+build. The [`Publish to PyPI`](.github/workflows/publish.yml) workflow is
+started manually from a `v*` tag, reruns those checks, and then waits for
+approval in the protected `pypi` GitHub environment before publishing. See the
 [release checklist](docs/release.md) for the one-time environment and PyPI
 trusted-publisher setup.
 

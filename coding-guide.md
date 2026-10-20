@@ -80,7 +80,7 @@ docs/
 CHANGELOG.md          # release notes
 
 .github/workflows/
-├── ci.yml            # tests, docs/example builds, package inspection
+├── ci.yml            # tests, docs/example builds, artifacts, package checks
 └── publish.yml       # manual, human-approved PyPI release
 ```
 

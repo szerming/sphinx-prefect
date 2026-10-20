@@ -76,6 +76,14 @@ jobs:
       - name: Build example project
         run: uv run sphinx-build -W -b html examples/demo examples/demo/_build/html
 
+      - name: Upload example HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-html
+          path: examples/demo/_build/html
+          if-no-files-found: error
+          retention-days: 7
+
   package:
     name: Package
     runs-on: ubuntu-latest
