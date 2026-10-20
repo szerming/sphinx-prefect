@@ -1,0 +1,68 @@
+name: Publish to PyPI
+
+on:
+  workflow_dispatch:
+
+# Never run two releases at the same time, and never cancel one in progress.
+concurrency:
+  group: pypi-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Require a matching release tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the selected ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" != "tag" || "$GITHUB_REF_NAME" != v* ]]; then
+            echo "::error::Select a v* tag (for example v0.1.0) when running this workflow."
+            exit 1
+          fi
+
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' \
+            src/sphinxcontrib/prefect/__init__.py)
+          if [[ "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package version $version."
+            exit 1
+          fi
+
+  checks:
+    name: Verify and build
+    needs: guard
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to PyPI
+    needs: [guard, checks]
+    runs-on: ubuntu-latest
+
+    # The protected ``pypi`` environment supplies the human approval gate.
+    # Configure required reviewers in Settings -> Environments -> pypi.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/sphinx-contrib-prefect
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

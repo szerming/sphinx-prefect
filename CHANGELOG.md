@@ -26,3 +26,6 @@ The project follows [Semantic Versioning](https://semver.org/) and
 - A buildable example project under `examples/demo`.
 - Documentation, a release checklist, package classifiers, and CI jobs that
   build the docs and example and verify wheel contents.
+- A manually triggered `Publish to PyPI` workflow that reruns the checks and
+  requires approval in the protected `pypi` environment before publishing with
+  trusted publishing.

@@ -1,8 +1,29 @@
 # Release checklist
 
-This checklist covers a `sphinx-contrib-prefect` release. Publishing to PyPI is
-a **human step**: it needs maintainer credentials and cannot be performed by
-CI.
+This checklist covers a `sphinx-contrib-prefect` release. Publishing runs
+through the **Publish to PyPI** GitHub Actions workflow. The workflow reruns the
+CI checks, tests, and package build, then waits for human approval in the
+protected `pypi` environment before uploading with PyPI trusted publishing. No
+PyPI token is stored in the repository.
+
+## 0. One-time repository setup
+
+A maintainer configures these once per repository:
+
+- In **Settings → Environments**, create an environment named `pypi` and add
+  at least one required reviewer. This is the human approval gate before every
+  upload.
+- In PyPI's **Publishing → Trusted publishers**, add a GitHub publisher:
+  - owner: `szerming`
+  - repository: `sphinx-prefect`
+  - workflow: `publish.yml`
+  - environment: `pypi`
+- Leave repository secrets unset. The workflow authenticates to PyPI with the
+  GitHub OIDC token (`id-token: write`) instead of a password.
+
+The workflow only publishes from a `v*` tag that matches `__version__` in
+`src/sphinxcontrib/prefect/__init__.py`. It rejects branches and mismatched
+tags in its guard job.
 
 ## 1. Prepare the release
 
@@ -60,17 +81,27 @@ git push origin main
 git push origin vX.Y.Z
 ```
 
-## 4. Upload to PyPI (human step)
+## 4. Publish through GitHub Actions (human approval required)
 
-A maintainer with PyPI credentials performs the upload. CI, agents, and
-contributors must not publish on their own.
+1. Open **Actions → Publish to PyPI → Run workflow**.
+2. In **Use workflow from**, select the `vX.Y.Z` tag.
+3. Start the run. The guard job checks that the tag matches the package
+   version, then the `checks` job reruns:
+   - formatting and lint;
+   - the full test suite on Python 3.12 and 3.13;
+   - the docs and example builds with `-W`;
+   - wheel and sdist inspection;
+   - a clean-venv install and example rebuild from the built wheel.
+4. Only after every check passes does the `publish` job start. It waits for a
+   required reviewer's approval on the `pypi` environment.
+5. Approve the deployment on the workflow run page. The publish job downloads
+   the verified `dist` artifact and uploads it with
+   `pypa/gh-action-pypi-publish` using trusted publishing.
+6. Do not publish from a branch or from an untagged commit.
 
-```bash
-uv publish
-```
-
-Alternatively, use `twine upload dist/*`. Upload from the tagged commit so the
-artifacts match the tag.
+If the workflow is unavailable, a maintainer with PyPI credentials may still
+upload the verified artifacts manually with `uv publish`. That fallback is a
+human-only action; CI and agents must not run it.
 
 ## 5. Verify the published release
 

@@ -78,6 +78,10 @@ docs/
 └── guide.md          # user-facing usage guide
 
 CHANGELOG.md          # release notes
+
+.github/workflows/
+├── ci.yml            # tests, docs/example builds, package inspection
+└── publish.yml       # manual, human-approved PyPI release
 ```
 
 `src/sphinxcontrib/` is a native PEP 420 namespace package. Do not add
@@ -433,3 +437,14 @@ After every code implementation, before considering the work complete:
 - `README.md` and the usage guide reflect the new behavior.
 - No user flow module is imported during `setup()`.
 - Error messages honor `prefect_on_error`.
+
+## Release automation
+
+`.github/workflows/publish.yml` is manual-only (`workflow_dispatch`). It accepts
+only a `v*` tag whose name matches `__version__`, then calls `ci.yml` through
+`workflow_call` to rerun formatting, lint, tests, docs/example builds, package
+inspection, and the clean-venv example build. The `publish` job uses the
+protected `pypi` GitHub environment: its required reviewers are the human
+approval gate, and the upload uses PyPI trusted publishing (OIDC), so no PyPI
+token is stored in the repository. The one-time environment and trusted
+publisher setup is documented in [`docs/release.md`](docs/release.md).
