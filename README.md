@@ -12,10 +12,10 @@ for self-contained flows.
 `prefect-flow` and `prefect-params` directives, main-flow docstring markers,
 external RST and MyST Markdown descriptions, module scanning with
 `prefect-flow-index`, parameter tables, Pydantic model documentation,
-runtime Mermaid flow graphs with `:show-dag:` and `prefect-dag`, and
-subflow/task sections with cross-references are implemented. The remaining
-work is tracked in
-issues [#9–#10](https://github.com/szerming/sphinx-prefect/issues).
+runtime Mermaid flow graphs with `:show-dag:` and `prefect-dag`, subflow/task
+sections with cross-references, and the unified error, dependency-tracking,
+and parallel-safety policy are implemented. The remaining release work is
+tracked in [#10](https://github.com/szerming/sphinx-prefect/issues/10).
 
 ## Project context
 
@@ -176,6 +176,20 @@ The text/man builders render Mermaid's `[graph]` placeholder, and LaTeX/PDF
 output needs the `mmdc` binary. See the
 [usage guide](docs/guide.md#runtime-flow-graphs) for enablement, sample
 arguments, failure behavior, and limitations.
+
+## Errors, rebuilds, and parallelism
+
+Recoverable failures warn and omit the affected part of the page by default.
+Set `prefect_on_error = "error"` to fail the build instead. Every diagnostic
+names the directive's `path:line` and, where available, the flow, task, module,
+or description file involved; the complete list is in the
+[usage guide's failure-modes table](docs/guide.md#failure-modes).
+
+Flow and task source files and external description files are registered with
+`env.note_dependency()`, so editing them rebuilds the page in Sphinx
+incremental mode. The extension declares `parallel_read_safe = False` because
+runtime DAG generation executes user code, and `parallel_write_safe = True`.
+v0.1 has no custom DAG cache and no subprocess isolation.
 
 ## Development
 

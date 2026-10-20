@@ -20,6 +20,7 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | Main-flow docstring markers and stripping | Available |
 | Module scanning with `prefect-flow-index` | Available |
 | `prefect_on_error` warn/error policy | Available |
+| Source-located diagnostics and rebuild dependencies | Available |
 | Parameter tables from Prefect's parameter schema | Available |
 | Pydantic model documentation with nested models | Available |
 | Runtime Mermaid flow graph with `:show-dag:` and `prefect-dag` | Available |
@@ -538,7 +539,30 @@ prefect_on_error = "error"
 ```
 
 With strict mode, the same problems raise a Sphinx error and stop the build.
-Typical causes are:
+Warnings and errors include the directive's source location (`path:line`) and,
+where available, the flow, task, module, or description file involved.
+
+### Failure modes
+
+| Failure | Default (`"warn"`) | `"error"` |
+| --- | --- | --- |
+| Module cannot be imported | Warn; omit the affected section(s) | Fail the build |
+| Missing attribute or callable path | Warn; omit the affected section(s) | Fail the build |
+| Object is not a Prefect `Flow` (for example a task or plain function) | Warn; omit the affected section(s) | Fail the build |
+| Malformed marker YAML or invalid marker value | Warn; omit the marker and render the rest | Fail the build |
+| External description file missing or unreadable | Warn; omit the description | Fail the build |
+| Markdown description without MyST | Warn; omit the description | Fail the build |
+| Required DAG sample arguments missing | Warn; omit the graph | Fail the build |
+| Invalid `prefect_dag_sample_args` or arguments that do not match the signature | Warn; omit the graph | Fail the build |
+| DAG execution failure, including `.submit()` / `.map()` and missing run context | Warn; omit the graph | Fail the build |
+| Pydantic model is not importable (local, nested, or dynamic) | Warn; omit the model block | Fail the build |
+| Pydantic v1 model | Warn; omit the model block | Fail the build |
+| `prefect-flow-index` finds no flows | Warn; render nothing | Warn; render nothing |
+
+A missing description or an empty parameter list is not a failure: the
+directive renders nothing for that part.
+
+Typical causes of a diagnostic are:
 
 - the flow package is not on `sys.path` in `conf.py`;
 - the entrypoint has a typo;
@@ -552,6 +576,18 @@ Typical causes are:
   class, or a dynamically generated class that cannot be imported by name;
 - a module in `prefect_modules` or a `prefect_main_flows` entry cannot be
   imported or does not name a Prefect flow.
+
+### Rebuilds and dependencies
+
+Every documented flow, subflow, and task registers its source file with
+`env.note_dependency()`, and a successfully read external description file is
+registered too. Editing those files makes the next incremental build rewrite
+the affected page. The extension does not add its own cache, so Sphinx's
+dependency tracking is the single rebuild mechanism.
+
+Runtime DAG generation executes user code, so the extension sets
+`parallel_read_safe = False`. It sets `parallel_write_safe = True` and does not
+use subprocess isolation in v0.1.
 
 ## Current limitations and safety
 

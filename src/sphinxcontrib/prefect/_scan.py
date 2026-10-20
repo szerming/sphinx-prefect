@@ -6,6 +6,7 @@ import importlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from sphinxcontrib.prefect._errors import with_sources
 from sphinxcontrib.prefect._import import (
     ObjectResolutionError,
     flow_entrypoint,
@@ -72,8 +73,8 @@ def scan_main_flows(
         """Parse *flow*'s markers once and collect their diagnostics."""
         if entrypoint not in markers_by_entrypoint:
             markers = parse_mainflow_markers(flow.fn.__doc__)
-            warnings.extend(markers.warnings)
-            errors.extend(markers.errors)
+            warnings.extend(with_sources(markers.warnings, flow.fn))
+            errors.extend(with_sources(markers.errors, flow.fn))
             markers_by_entrypoint[entrypoint] = markers
         return markers_by_entrypoint[entrypoint]
 

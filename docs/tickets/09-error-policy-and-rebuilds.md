@@ -1,6 +1,6 @@
 # 09 — Error policy, dependency tracking, and parallel safety
 
-- **Status:** Published — [#9](https://github.com/szerming/sphinx-prefect/issues/9)
+- **Status:** Implemented — [#9](https://github.com/szerming/sphinx-prefect/issues/9)
 - **Labels:** `ready-for-agent`, `enhancement`
 - **Depends on:** [#2](https://github.com/szerming/sphinx-prefect/issues/2), [#3](https://github.com/szerming/sphinx-prefect/issues/3), [#4](https://github.com/szerming/sphinx-prefect/issues/4), [#5](https://github.com/szerming/sphinx-prefect/issues/5), [#6](https://github.com/szerming/sphinx-prefect/issues/6), [#7](https://github.com/szerming/sphinx-prefect/issues/7), [#8](https://github.com/szerming/sphinx-prefect/issues/8)
 - **Spec:** [`docs/specs/0001-sphinx-prefect-v0.1.md`](../specs/0001-sphinx-prefect-v0.1.md)
@@ -28,14 +28,14 @@ The feature tickets implement happy paths. This ticket makes failure behavior co
 
 ## Acceptance criteria
 
-- [ ] Every listed failure path warns by default and continues.
-- [ ] `prefect_on_error = "error"` fails the build for every listed failure path.
-- [ ] Warnings name the directive location and the relevant module/file.
-- [ ] Flow/task source files and external descriptions are registered as dependencies.
-- [ ] Editing a flow source file causes a rebuild in Sphinx incremental mode.
-- [ ] `parallel_read_safe` is `False`; `parallel_write_safe` is `True`.
-- [ ] No custom cache or subprocess is present.
-- [ ] Duplicate models across pages still produce no warnings.
+- [x] Every listed failure path warns by default and continues.
+- [x] `prefect_on_error = "error"` fails the build for every listed failure path.
+- [x] Warnings name the directive location and the relevant module/file.
+- [x] Flow/task source files and external descriptions are registered as dependencies.
+- [x] Editing a flow source file causes a rebuild in Sphinx incremental mode.
+- [x] `parallel_read_safe` is `False`; `parallel_write_safe` is `True`.
+- [x] No custom cache or subprocess is present.
+- [x] Duplicate models across pages still produce no warnings.
 
 ## Test plan
 

@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Any
 
 from docutils import nodes
 
-from sphinxcontrib.prefect._errors import report_diagnostics, report_error
+from sphinxcontrib.prefect._errors import (
+    report_diagnostics,
+    report_error,
+    source_note,
+    with_source,
+    with_sources,
+)
 from sphinxcontrib.prefect._graph import build_diagram, classify_nodes, parse_mermaid
 from sphinxcontrib.prefect._import import flow_entrypoint
 
@@ -53,7 +59,10 @@ def render_flow_graph(
     from sphinxcontrib.mermaid import mermaid
 
     classified = classify_nodes(flow, graph)
-    report_diagnostics(directive, warnings=classified.warnings)
+    report_diagnostics(
+        directive,
+        warnings=with_sources(classified.warnings, flow.fn),
+    )
 
     section += nodes.rubric(text="Flow graph")
     diagram = mermaid()
@@ -96,8 +105,11 @@ def _sample_arguments(
     if not isinstance(configured, Mapping):
         report_error(
             directive,
-            "prefect_dag_sample_args must be a mapping of flow entrypoints to "
-            "argument mappings.",
+            with_source(
+                "prefect_dag_sample_args must be a mapping of flow entrypoints to "
+                "argument mappings.",
+                flow.fn,
+            ),
         )
         return None
 
@@ -107,7 +119,7 @@ def _sample_arguments(
             report_error(
                 directive,
                 f"prefect_dag_sample_args[{entrypoint!r}] must be a mapping of "
-                "parameter names to values.",
+                f"parameter names to values.{source_note(flow.fn)}",
             )
             return None
         return dict(arguments)
@@ -118,7 +130,8 @@ def _sample_arguments(
         report_error(
             directive,
             f"The runtime DAG for {entrypoint!r} requires sample arguments for "
-            f"{names}. Configure prefect_dag_sample_args[{entrypoint!r}].",
+            f"{names}. Configure prefect_dag_sample_args[{entrypoint!r}]."
+            f"{source_note(flow.fn)}",
         )
         return None
     return {}
@@ -150,7 +163,7 @@ def _execution_failure(flow: Flow, exc: Exception) -> str:
 
     return (
         f"Could not generate the runtime DAG for {entrypoint!r}: {reason}. "
-        "The graph was omitted."
+        f"The graph was omitted.{source_note(flow.fn)}"
     )
 
 

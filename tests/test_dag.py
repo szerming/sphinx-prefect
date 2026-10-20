@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 from docutils import nodes
-from helpers import build, copy_test_root, find_section
+from helpers import build, copy_test_root, find_section, purge_modules
 from sphinx.errors import SphinxError
 from sphinxcontrib.mermaid import mermaid
 
@@ -26,8 +25,7 @@ SHOW_DAG_PAGE = (
 @pytest.fixture(autouse=True)
 def isolate_dag_package() -> None:
     """Import each temporary ``dag_pkg`` instead of a cached earlier copy."""
-    for name in [name for name in sys.modules if name.split(".")[0] == "dag_pkg"]:
-        del sys.modules[name]
+    purge_modules("dag_pkg")
 
 
 def make_src(

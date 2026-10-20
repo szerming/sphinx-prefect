@@ -13,6 +13,7 @@ from sphinxcontrib.prefect._errors import (
     report_diagnostics,
     report_error,
     report_warning,
+    with_sources,
 )
 from sphinxcontrib.prefect._import import ObjectResolutionError, resolve_flow
 from sphinxcontrib.prefect._markers import parse_mainflow_markers
@@ -84,8 +85,8 @@ class PrefectFlowDirective(SphinxDirective):
         markers = parse_mainflow_markers(flow.fn.__doc__)
         report_diagnostics(
             self,
-            warnings=markers.warnings,
-            errors=markers.errors,
+            warnings=with_sources(markers.warnings, flow.fn),
+            errors=with_sources(markers.errors, flow.fn),
         )
         models = _collect_models_or_report(self, flow)
         result = render_flow_section(

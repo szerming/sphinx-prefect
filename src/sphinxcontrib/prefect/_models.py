@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from sphinxcontrib.prefect._errors import source_note
 from sphinxcontrib.prefect._import import flow_entrypoint
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ def collect_callable_models(
         hints = typing.get_type_hints(fn, include_extras=True)
     except Exception as exc:
         return ModelCollection(
-            errors=(f"Could not read type hints for {owner}: {exc}",)
+            errors=(f"Could not read type hints for {owner}{source_note(fn)}: {exc}",)
         )
 
     collector = _ModelCollector()
@@ -199,4 +200,7 @@ def _is_pydantic_v1_model(obj: Any) -> bool:
 
 def _not_documentable_message(model: type[Any], reason: str) -> str:
     name = f"{model.__module__}.{model.__qualname__}"
-    return f"Pydantic model {name!r} {reason}; omitting its documentation."
+    return (
+        f"Pydantic model {name!r}{source_note(model)} {reason}; "
+        "omitting its documentation."
+    )

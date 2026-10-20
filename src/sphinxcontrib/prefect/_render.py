@@ -16,6 +16,7 @@ from sphinxcontrib.prefect._description import (
     render_rst_description,
     resolve_flow_description,
 )
+from sphinxcontrib.prefect._errors import source_path, with_sources
 from sphinxcontrib.prefect._graph import GraphNode, NodeKind, ParsedGraph
 from sphinxcontrib.prefect._import import callable_entrypoint, flow_entrypoint
 from sphinxcontrib.prefect._markers import parse_mainflow_markers
@@ -298,8 +299,8 @@ def _render_subflow_section(
     )
     parent += section
     return RenderDiagnostics(
-        warnings=markers.warnings,
-        errors=(*markers.errors, *errors),
+        warnings=with_sources(markers.warnings, subflow.fn),
+        errors=(*with_sources(markers.errors, subflow.fn), *errors),
     )
 
 
@@ -362,10 +363,7 @@ def note_source_dependency(
     fn: Callable[..., Any],
 ) -> None:
     """Register a related node's source file as a build dependency."""
-    try:
-        source = inspect.getsourcefile(fn)
-    except TypeError:
-        return
+    source = source_path(fn)
     if source is not None:
         directive.env.note_dependency(source)
 

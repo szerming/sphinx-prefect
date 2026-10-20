@@ -49,6 +49,7 @@ tests/
 │   ├── test-index/   # module scan and prefect-flow-index
 │   └── test-dag/     # runtime DAG graph, errors, and builder coverage
 ├── test_dag.py
+├── test_errors.py
 ├── test_flow_directive.py
 ├── test_index_directive.py
 ├── test_markers.py
@@ -252,6 +253,19 @@ Parsers and scan helpers return warnings and errors instead of reporting them.
 Directives route both collections through `_errors.report_diagnostics()` so
 every message carries the directive source location.
 
+Name the relevant flow, task, module, or file in the message itself. Use
+`_errors.with_sources()` (or `with_source()` for one message) at the boundary
+where the callable is known. Use `source_note()` instead when the message
+already names the entrypoint, so it is not repeated. `_errors.source_path()`
+prefers `inspect.getsourcefile()` and falls back to `__code__.co_filename`,
+ignoring pseudo-paths such as `<string>`. Marker parsing stays pure;
+directives, the scan, and the rendering helpers add source context to its
+diagnostics. Model diagnostics carry the model's own source path, so do not
+wrap them again with the flow path.
+
+`_errors.report_error()` is the single `prefect_on_error` helper. Do not add
+per-feature warning/error branches.
+
 Do not print to stdout or use generic exceptions for user errors.
 
 ### Parallel safety
@@ -309,6 +323,11 @@ roots as `tests/roots/test-<name>`.
   model cross-references, nested and recursive models, RootModel unwrapping,
   dynamic and Pydantic v1 diagnostics, cross-page model deduplication, and
   `prefect-params` output.
+- `tests/test_errors.py` parameterizes every recoverable failure path in warn
+  and strict modes, checks that diagnostics name the source file, unit-tests
+  `note_source_dependency()`, and rebuilds after editing a flow source file or
+  an external description. It also checks model deduplication across separate
+  builds.
 - Directive tests assert both doctree nodes and rendered HTML. Description
   tests cover overrides, missing files, MyST rendering when `myst-parser` is
   installed, and the missing-parser warn/error paths. The MyST happy-path test

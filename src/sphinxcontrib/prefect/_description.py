@@ -17,10 +17,6 @@ if TYPE_CHECKING:
     from sphinxcontrib.prefect._markers import MarkerResult
 
 _MARKDOWN_SUFFIXES = {".md", ".markdown"}
-_MYST_MISSING = (
-    "Markdown description files require MyST; install "
-    "'sphinx-contrib-prefect[markdown]'."
-)
 
 
 class _MystBindings(NamedTuple):
@@ -33,9 +29,10 @@ class _MystBindings(NamedTuple):
 
 @dataclass(frozen=True)
 class ExternalDescription:
-    """Description text read from a file, and its markup format."""
+    """Description text read from a file, its source path, and markup format."""
 
     text: str
+    path: str
     format: Literal["rst", "markdown"] = "rst"
 
 
@@ -73,7 +70,11 @@ def read_description_file(
     description_format = (
         "markdown" if source.suffix.lower() in _MARKDOWN_SUFFIXES else "rst"
     )
-    return ExternalDescription(text, format=description_format)
+    return ExternalDescription(
+        text,
+        str(source),
+        format=description_format,
+    )
 
 
 def render_external_description(
@@ -88,7 +89,11 @@ def render_external_description(
 
     myst = _load_myst()
     if myst is None:
-        report_error(directive, _MYST_MISSING)
+        report_error(
+            directive,
+            f"Markdown description file {description.path!r} requires MyST; "
+            "install 'sphinx-contrib-prefect[markdown]'.",
+        )
         return
     _render_markdown(directive, section, description.text, myst)
 

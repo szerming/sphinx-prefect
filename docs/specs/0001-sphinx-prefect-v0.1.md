@@ -388,7 +388,6 @@ tests/
     test-flow/
     test-index/
     test-dag/
-    test-errors/
   test_*.py
 docs/
   ...

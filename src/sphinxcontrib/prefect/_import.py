@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING, Any
 
+from sphinxcontrib.prefect._errors import source_note
+
 if TYPE_CHECKING:
     from prefect import Flow
 
@@ -62,7 +64,8 @@ def resolve_flow(entrypoint: str) -> Flow:
             obj = getattr(obj, part)
         except AttributeError as exc:
             raise ObjectResolutionError(
-                f"Could not find {attribute_path!r} in module {module_name!r}."
+                f"Could not find {attribute_path!r} in module "
+                f"{module_name!r}{source_note(module)}."
             ) from exc
 
     # Importing Prefect is deferred until an entrypoint is actually resolved.
@@ -70,6 +73,7 @@ def resolve_flow(entrypoint: str) -> Flow:
 
     if not isinstance(obj, Flow):
         raise ObjectResolutionError(
-            f"Object {entrypoint!r} is a {type(obj).__name__}, not a Prefect flow."
+            f"Object {entrypoint!r} is a {type(obj).__name__}"
+            f"{source_note(getattr(obj, 'fn', obj))}, not a Prefect flow."
         )
     return obj

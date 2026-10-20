@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import sys
 from typing import TYPE_CHECKING
 
 from docutils import nodes
@@ -10,6 +11,13 @@ from docutils import nodes
 if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any
+
+
+def purge_modules(*prefixes: str) -> None:
+    """Remove cached modules whose top-level name is in *prefixes*."""
+    for name in list(sys.modules):
+        if name.split(".")[0] in prefixes:
+            del sys.modules[name]
 
 
 def copy_test_root(
