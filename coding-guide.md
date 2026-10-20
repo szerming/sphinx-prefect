@@ -7,7 +7,8 @@ This guide is for contributors and coding agents working on
 
 ## Development setup
 
-Requirements: Python 3.12 or 3.13 and [`uv`](https://docs.astral.sh/uv/).
+Requirements: Python 3.12 or 3.13 and [`uv`](https://docs.astral.sh/uv/). The
+package declares `>=3.12,<3.15`; CI exercises the two tested versions.
 
 ```bash
 git clone git@github.com:szerming/sphinx-prefect.git
@@ -21,7 +22,12 @@ Run the same checks as CI:
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest
+uv run sphinx-build -W -b html docs docs/_build/html
+uv run sphinx-build -W -b html examples/demo examples/demo/_build/html
 ```
+
+`--all-extras` installs MyST, which the documentation build needs. Build the
+wheel and sdist with `uv build`; `dist/` also contains a `.gitignore`.
 
 Apply formatting with `uv run ruff format .`.
 
@@ -49,7 +55,9 @@ tests/
 │   ├── test-index/   # module scan and prefect-flow-index
 │   └── test-dag/     # runtime DAG graph, errors, and builder coverage
 ├── test_dag.py
+├── test_distribution.py  # pyproject compatibility ranges and classifiers
 ├── test_errors.py
+├── test_example.py       # builds examples/demo with -W
 ├── test_flow_directive.py
 ├── test_index_directive.py
 ├── test_markers.py
@@ -57,11 +65,19 @@ tests/
 ├── test_parameters.py
 └── test_scan.py
 
+examples/
+└── demo/             # buildable example project exercising every directive
+
 docs/
+├── conf.py           # MyST-based documentation build
+├── index.md          # documentation home and toctree
+├── release.md        # release checklist, including the manual PyPI step
 ├── adr/              # architecture decision records
 ├── specs/            # approved specifications
-├── tickets/          # local ticket drafts
+├── tickets/          # local ticket drafts (excluded from the docs build)
 └── guide.md          # user-facing usage guide
+
+CHANGELOG.md          # release notes
 ```
 
 `src/sphinxcontrib/` is a native PEP 420 namespace package. Do not add
@@ -328,6 +344,11 @@ roots as `tests/roots/test-<name>`.
   `note_source_dependency()`, and rebuilds after editing a flow source file or
   an external description. It also checks model deduplication across separate
   builds.
+- `tests/test_distribution.py` checks the `pyproject.toml` compatibility
+  ranges, MIT license, and distribution classifiers.
+- `tests/test_example.py` copies `examples/demo/` to a temporary directory and
+  builds it with `warningiserror=True`, then asserts the discovered flows,
+  parameter table, model blocks, runtime graph, subflows, and tasks.
 - Directive tests assert both doctree nodes and rendered HTML. Description
   tests cover overrides, missing files, MyST rendering when `myst-parser` is
   installed, and the missing-parser warn/error paths. The MyST happy-path test
@@ -373,8 +394,9 @@ Checklist for a new directive or rendering feature:
 5. Test the happy path in the doctree and HTML, plus the warn and strict error
    paths.
 6. Confirm `setup()` still does not import Prefect or user modules.
-7. Run formatting, lint, and tests.
-8. Update the user-facing documentation (see below).
+7. Run formatting, lint, and tests, then build `docs/` and `examples/demo/`
+   with `-W`.
+8. Update the user-facing documentation and the example project (see below).
 
 ## Documentation upkeep
 
@@ -385,11 +407,16 @@ After every code implementation, before considering the work complete:
    current.
 2. **Update [`docs/guide.md`](docs/guide.md)** when user-facing behavior,
    configuration, or examples change.
-3. **Update this guide** when setup, architecture, conventions, or testing
+3. **Update [`examples/demo/`](examples/demo/)** when a new directive, option,
+   or documented limitation deserves an executable example.
+4. **Update this guide** when setup, architecture, conventions, or testing
    change.
-4. **Add or amend an ADR** for a significant architectural decision, and update
+5. **Add or amend an ADR** for a significant architectural decision, and update
    [`GLOSSARY.md`](GLOSSARY.md) when introducing or changing domain vocabulary.
-5. **Update the ticket draft** under `docs/tickets/` when an implementation
+6. **Update [`CHANGELOG.md`](CHANGELOG.md)** under `Unreleased` for every
+   user-visible change, and keep [`docs/release.md`](docs/release.md) aligned
+   with the packaging and publication steps.
+7. **Update the ticket draft** under `docs/tickets/` when an implementation
    changes a ticket's scope or acceptance criteria.
 
 ## Definition of done
@@ -397,6 +424,11 @@ After every code implementation, before considering the work complete:
 - `uv run ruff format --check .` passes.
 - `uv run ruff check .` passes.
 - `uv run pytest` passes.
+- `uv run sphinx-build -W -b html docs docs/_build/html` passes.
+- `uv run sphinx-build -W -b html examples/demo examples/demo/_build/html`
+  passes.
+- `uv build` succeeds, and the wheel contains `sphinxcontrib/prefect/` with no
+  `sphinxcontrib/__init__.py`.
 - New behavior has integration coverage in a Sphinx test root.
 - `README.md` and the usage guide reflect the new behavior.
 - No user flow module is imported during `setup()`.

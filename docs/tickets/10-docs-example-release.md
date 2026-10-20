@@ -1,6 +1,6 @@
 # 10 — Documentation, example project, and release
 
-- **Status:** Published — [#10](https://github.com/szerming/sphinx-prefect/issues/10)
+- **Status:** Implemented — [#10](https://github.com/szerming/sphinx-prefect/issues/10)
 - **Labels:** `ready-for-agent`, `documentation`
 - **Depends on:** [#1](https://github.com/szerming/sphinx-prefect/issues/1), [#2](https://github.com/szerming/sphinx-prefect/issues/2), [#3](https://github.com/szerming/sphinx-prefect/issues/3), [#4](https://github.com/szerming/sphinx-prefect/issues/4), [#5](https://github.com/szerming/sphinx-prefect/issues/5), [#6](https://github.com/szerming/sphinx-prefect/issues/6), [#7](https://github.com/szerming/sphinx-prefect/issues/7), [#8](https://github.com/szerming/sphinx-prefect/issues/8), [#9](https://github.com/szerming/sphinx-prefect/issues/9)
 - **Spec:** [`docs/specs/0001-sphinx-prefect-v0.1.md`](../specs/0001-sphinx-prefect-v0.1.md)
@@ -33,13 +33,13 @@ The extension needs a usable quickstart, an example that exercises every feature
 
 ## Acceptance criteria
 
-- [ ] README quickstart builds a working page in a fresh environment.
-- [ ] `sphinx-build -W` for the extension docs succeeds.
-- [ ] The example project builds and demonstrates description, params, models, DAG, subflows/tasks, and index scanning.
-- [ ] `uv build` succeeds; wheel/sdist contents are correct.
-- [ ] Package metadata matches the spec's compatibility matrix.
-- [ ] Release checklist is documented.
-- [ ] PyPI upload is explicitly marked as a human step.
+- [x] README quickstart builds a working page in a fresh environment.
+- [x] `sphinx-build -W` for the extension docs succeeds.
+- [x] The example project builds and demonstrates description, params, models, DAG, subflows/tasks, and index scanning.
+- [x] `uv build` succeeds; wheel/sdist contents are correct.
+- [x] Package metadata matches the spec's compatibility matrix.
+- [x] Release checklist is documented.
+- [x] PyPI upload is explicitly marked as a human step.
 
 ## Test plan
 

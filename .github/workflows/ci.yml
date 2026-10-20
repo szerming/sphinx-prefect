@@ -36,22 +36,6 @@ jobs:
       - name: Run tests
         run: uv run pytest
 
-      - name: Build wheel
-        run: uv build --wheel
-
-      - name: Check wheel contents
-        run: |
-          uv run python - <<'PY'
-          import glob
-          import zipfile
-
-          wheel = glob.glob("dist/*.whl")[0]
-          names = zipfile.ZipFile(wheel).namelist()
-          assert "sphinxcontrib/prefect/__init__.py" in names
-          assert "sphinxcontrib/__init__.py" not in names
-          print(f"{wheel}: package layout OK")
-          PY
-
   markdown:
     name: Markdown extra
     runs-on: ubuntu-latest
@@ -69,3 +53,119 @@ jobs:
 
       - name: Run tests with MyST
         run: uv run pytest
+
+  docs:
+    name: Documentation and example
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies with MyST
+        run: uv sync --extra markdown
+
+      - name: Build extension documentation
+        run: uv run sphinx-build -W -b html docs docs/_build/html
+
+      - name: Build example project
+        run: uv run sphinx-build -W -b html examples/demo examples/demo/_build/html
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Inspect wheel and sdist
+        run: |
+          uv run python - <<'PY'
+          import glob
+          import tarfile
+          import zipfile
+          from email.parser import Parser
+
+          from packaging.requirements import Requirement
+
+          wheel = glob.glob("dist/*.whl")[0]
+          sdist = glob.glob("dist/*.tar.gz")[0]
+
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              assert "sphinxcontrib/prefect/__init__.py" in names
+              assert "sphinxcontrib/__init__.py" not in names
+              metadata_name = next(
+                  name for name in names if name.endswith(".dist-info/METADATA")
+              )
+              metadata = Parser().parsestr(
+                  archive.read(metadata_name).decode("utf-8")
+              )
+
+          assert set(metadata["Requires-Python"].split(",")) == {">=3.12", "<3.15"}
+          assert metadata["License-Expression"] == "MIT"
+          assert "Framework :: Sphinx :: Extension" in metadata.get_all(
+              "Classifier", []
+          )
+          requirements = [
+              Requirement(value)
+              for value in metadata.get_all("Requires-Dist", [])
+          ]
+          for package, lower, upper in (
+              ("sphinx", ">=9", "<10"),
+              ("prefect", ">=3", "<4"),
+              ("pydantic", ">=2.10", "<3"),
+              ("pyyaml", ">=5.4", "<7"),
+              ("sphinxcontrib-mermaid", ">=2.1", "<3"),
+              ("sphinxcontrib-pydantic", ">=0.4", "<0.5"),
+          ):
+              requirement = next(
+                  (item for item in requirements if item.name == package),
+                  None,
+              )
+              assert requirement is not None, f"missing {package} in {requirements}"
+              specifier = str(requirement.specifier)
+              assert lower in specifier and upper in specifier, (
+                  f"missing {package} range in {specifier}"
+              )
+
+          with tarfile.open(sdist) as archive:
+              sdist_names = archive.getnames()
+          root = sdist_names[0].split("/", 1)[0]
+          for relative in (
+              "pyproject.toml",
+              "README.md",
+              "LICENSE",
+              "CHANGELOG.md",
+              "src/sphinxcontrib/prefect/__init__.py",
+          ):
+              assert f"{root}/{relative}" in sdist_names, f"missing {relative}"
+
+          print(f"{wheel}: wheel layout and metadata OK")
+          print(f"{sdist}: sdist layout OK")
+          PY
+
+      - name: Install the wheel into a clean environment
+        run: |
+          uv venv "$RUNNER_TEMP/release-venv"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" dist/*.whl
+
+      - name: Build the example from the installed wheel
+        run: |
+          "$RUNNER_TEMP/release-venv/bin/python" -m sphinx -W -b html \
+            examples/demo "$RUNNER_TEMP/example-build"

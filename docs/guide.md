@@ -41,7 +41,9 @@ pip install "sphinx-contrib-prefect[markdown]"
 The extra is optional. Projects that only use RST docstrings and `.rst`
 description files do not need it.
 
-Supported versions: Python 3.12–3.14, Sphinx 9.x, Prefect 3.x, and Pydantic 2.x.
+Supported versions: Python 3.12–3.13, Sphinx 9.x, Prefect 3.x, and Pydantic 2.x.
+The package declares `requires-python = ">=3.12,<3.15"`; CI runs Python 3.12
+and 3.13.
 
 ## Complete example
 
@@ -364,6 +366,22 @@ code that needs an active flow-run context, and other execution failures also
 warn and omit the graph by default. Under `prefect_on_error = "error"` they
 fail the build instead.
 
+Prefect passes sample argument values directly to the flow function. It does
+not validate them against the flow's Pydantic parameter model, so a parameter
+whose annotation is a model needs a model instance in `conf.py`:
+
+```python
+from flows.models import ReportConfig
+
+prefect_dag_sample_args = {
+    "flows.eda": {"config": ReportConfig(title="Weekly revenue")},
+}
+```
+
+A plain dictionary is not coerced and usually fails while the flow body runs.
+The [example project](https://github.com/szerming/sphinx-prefect/tree/main/examples/demo)
+has a complete `prefect_dag_sample_args` entry with a nested model.
+
 The rendered diagram adds a main-flow node when Prefect's output omits it,
 draws edges from the main flow to the graph's root nodes, and applies
 `classDef` styles: indigo for the main flow, blue for subflows, green for
@@ -612,5 +630,5 @@ use subprocess isolation in v0.1.
   acceptance criteria.
 - [ADR-0002](adr/0002-standalone-directives.md) — why the extension uses
   standalone directives instead of autodoc documenters.
-- [Glossary](../GLOSSARY.md) — project terminology.
-- [Coding guide](../coding-guide.md) — development setup and conventions.
+- [Glossary](https://github.com/szerming/sphinx-prefect/blob/main/GLOSSARY.md) — project terminology.
+- [Coding guide](https://github.com/szerming/sphinx-prefect/blob/main/coding-guide.md) — development setup and conventions.

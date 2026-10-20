@@ -7,7 +7,7 @@
 - **Repository:** `szerming/sphinx-prefect`
 - **License:** MIT
 - **ADRs:** [0001](../adr/0001-runtime-prefect-dag.md), [0002](../adr/0002-standalone-directives.md), [0003](../adr/0003-delegate-pydantic-rendering.md), [0004](../adr/0004-docstring-markers-and-module-scan.md)
-- **Language:** See [GLOSSARY.md](../../GLOSSARY.md)
+- **Language:** See [GLOSSARY.md](https://github.com/szerming/sphinx-prefect/blob/main/GLOSSARY.md)
 
 ## 1. Summary
 
@@ -449,18 +449,18 @@ CI matrix: Python 3.12 and 3.13, Sphinx 9.x, Prefect 3.8.x, plus a job with the 
 
 ## 10. Acceptance criteria
 
-- [ ] A minimal Sphinx project can load `sphinxcontrib.prefect` and build a flow page.
-- [ ] The page shows the flow description, entrypoint, signature, and parameter table.
-- [ ] Pydantic parameter models render with fields, types, defaults, and descriptions.
-- [ ] A runtime Mermaid graph renders when explicitly enabled with sample arguments.
-- [ ] Observed subflows and tasks get sections and cross-references.
-- [ ] `prefect-flow-index` renders marked flows from `prefect_modules`.
-- [ ] All three marker forms select a flow and are stripped from the description.
-- [ ] DAG generation requires no Prefect server for pure flows.
-- [ ] Missing imports, DAG failures, and unsupported models warn by default and fail under `prefect_on_error = "error"`.
-- [ ] The text builder does not crash.
-- [ ] The happy-path docs build is warning-free with `-W`.
-- [ ] No implementation imports user flow modules during `setup()`.
+- [x] A minimal Sphinx project can load `sphinxcontrib.prefect` and build a flow page.
+- [x] The page shows the flow description, entrypoint, signature, and parameter table.
+- [x] Pydantic parameter models render with fields, types, defaults, and descriptions.
+- [x] A runtime Mermaid graph renders when explicitly enabled with sample arguments.
+- [x] Observed subflows and tasks get sections and cross-references.
+- [x] `prefect-flow-index` renders marked flows from `prefect_modules`.
+- [x] All three marker forms select a flow and are stripped from the description.
+- [x] DAG generation requires no Prefect server for pure flows.
+- [x] Missing imports, DAG failures, and unsupported models warn by default and fail under `prefect_on_error = "error"`.
+- [x] The text builder does not crash.
+- [x] The happy-path docs build is warning-free with `-W`.
+- [x] No implementation imports user flow modules during `setup()`.
 
 ## 11. Risks and limitations
 
@@ -492,7 +492,7 @@ CI matrix: Python 3.12 and 3.13, Sphinx 9.x, Prefect 3.8.x, plus a job with the 
 | [09](https://github.com/szerming/sphinx-prefect/issues/9) | Error policy, dependencies, and parallel safety | [#2](https://github.com/szerming/sphinx-prefect/issues/2)–[#8](https://github.com/szerming/sphinx-prefect/issues/8) |
 | [10](https://github.com/szerming/sphinx-prefect/issues/10) | Documentation, example project, and release | [#1](https://github.com/szerming/sphinx-prefect/issues/1)–[#9](https://github.com/szerming/sphinx-prefect/issues/9) |
 
-Published tickets: [#1](https://github.com/szerming/sphinx-prefect/issues/1)–[#10](https://github.com/szerming/sphinx-prefect/issues/10). Local drafts live in [`docs/tickets/`](../tickets/) and carry the same issue links.
+Published tickets: [#1](https://github.com/szerming/sphinx-prefect/issues/1)–[#10](https://github.com/szerming/sphinx-prefect/issues/10). Local drafts live in [`docs/tickets/`](https://github.com/szerming/sphinx-prefect/tree/main/docs/tickets) and carry the same issue links.
 
 ## 13. Future work
 

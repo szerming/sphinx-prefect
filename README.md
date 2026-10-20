@@ -8,14 +8,15 @@ normal Sphinx sections. The v0.1 design renders flow graphs with Prefect's own
 runtime Mermaid generation, so no Prefect server or network access is required
 for self-contained flows.
 
-**Status:** v0.1 is in development. The package scaffold, the core
+**Status:** v0.1 is ready for release. The package scaffold, the core
 `prefect-flow` and `prefect-params` directives, main-flow docstring markers,
 external RST and MyST Markdown descriptions, module scanning with
 `prefect-flow-index`, parameter tables, Pydantic model documentation,
 runtime Mermaid flow graphs with `:show-dag:` and `prefect-dag`, subflow/task
-sections with cross-references, and the unified error, dependency-tracking,
-and parallel-safety policy are implemented. The remaining release work is
-tracked in [#10](https://github.com/szerming/sphinx-prefect/issues/10).
+sections with cross-references, the unified error, dependency-tracking, and
+parallel-safety policy, and the documentation, example, and release
+preparation are implemented. See the [release checklist](docs/release.md) and
+[CHANGELOG](CHANGELOG.md). PyPI upload remains a manual maintainer step.
 
 ## Project context
 
@@ -24,6 +25,11 @@ Read these before changing behavior or architecture:
 - **[Usage guide](docs/guide.md)** — complete examples for documenting flows
   with `prefect-flow`, `prefect-params`, `prefect-dag`, and
   `prefect-flow-index`.
+- **[Example project](examples/demo/)** — a buildable Sphinx project with a
+  main flow, subflow, tasks, scalar and nested Pydantic parameters, all three
+  marker forms, an index page, and a standalone flow page.
+- **[Release checklist](docs/release.md)** — versioning, packaging, CI checks,
+  and the manual PyPI upload step.
 - **[v0.1 specification](docs/specs/0001-sphinx-prefect-v0.1.md)** — goals,
   behavior, compatibility, and the ticket map.
 - **[Architecture decision records](docs/adr/)** — accepted design decisions:
@@ -69,25 +75,28 @@ extensions = [
 ]
 ```
 
-Document a flow by its importable entrypoint:
+Document a flow by its importable entrypoint in `index.rst`:
 
 ```rst
-.. prefect-flow:: mypkg.flows.eda
+EDA pipeline
+============
 
-   Optional body content is appended after the generated description.
+.. prefect-flow:: mypkg.flows.eda
 ```
 
-The directive renders the flow's title, entrypoint, optional version,
-signature, reStructuredText description, parameter table, and Pydantic model
-documentation. Both `mypkg.flows.eda` and `mypkg.flows:eda` entrypoint forms
-are accepted.
+Build the page with `sphinx-build -b html . _build/html`. The directive renders
+the flow's title, entrypoint, optional version, signature, reStructuredText
+description, parameter table, and Pydantic model documentation. Both
+`mypkg.flows.eda` and `mypkg.flows:eda` entrypoint forms are accepted.
 
 Prefect reads parameter descriptions from Google-style `Args:` sections. Each
 row shows the parameter name, type, required/optional status, default, and
 description. Pydantic parameter models are rendered by
 `sphinxcontrib-pydantic`, including nested models and `Field(description=...)`
-text. Use `prefect-params` to render the flow's metadata fields, parameter
-table, and model sections without the description:
+text. Only importable module-level Pydantic v2 models can be documented; local,
+nested, dynamically generated, and Pydantic v1 models are omitted with a
+diagnostic. Use `prefect-params` to render the flow's metadata fields,
+parameter table, and model sections without the description:
 
 ```rst
 .. prefect-params:: mypkg.flows.eda
@@ -131,6 +140,73 @@ flows outside `prefect_modules` follow in configuration order. Module scanning
 imports user code, so import-time side effects may run during the build.
 `:show-dag:` and `:no-dag:` apply to every generated section.
 
+## Directive reference
+
+| Directive | Arguments | Options | Renders |
+| --- | --- | --- | --- |
+| `prefect-flow` | Flow entrypoint (`module.qualname` or `module:qualname`) | `:show-dag:`, `:no-dag:`, `:description-from:` | Title, entrypoint, version, signature, description, parameter table, models, optional graph, subflow/task sections, and body content |
+| `prefect-params` | Flow entrypoint | — | Entrypoint, version, signature, parameter table, and model sections |
+| `prefect-dag` | Flow entrypoint | — | Runtime graph plus the observed subflow/task/unknown-node sections |
+| `prefect-flow-index` | — | `:show-dag:`, `:no-dag:` | One `prefect-flow`-style section per selected main flow |
+
+## Configuration
+
+All values are registered with rebuild type `env`.
+
+| Name | Type | Default | Purpose |
+| --- | --- | --- | --- |
+| `prefect_modules` | `list[str]` | `[]` | Modules scanned by `prefect-flow-index` |
+| `prefect_main_flows` | `list[str]` | `[]` | Entrypoints selected as main flows regardless of markers |
+| `prefect_dag_enabled` | `bool` | `False` | Enable runtime graph generation for `prefect-flow` |
+| `prefect_dag_sample_args` | `dict[str, dict[str, object]]` | `{}` | Sample arguments keyed by flow entrypoint |
+| `prefect_on_error` | `str` | `"warn"` | `"warn"` continues with a warning; `"error"` fails the build |
+
+## Main-flow markers
+
+A flow becomes a main flow in `prefect-flow-index` when its docstring uses any
+of these forms:
+
+```python
+@flow
+def eda(seed: int = 1):
+    """Run the EDA build.
+
+    @mainflow
+    """
+```
+
+```python
+@flow
+def eda(seed: int = 1):
+    """---
+    mainflow: true
+    ---
+    Run the EDA build.
+    """
+```
+
+```python
+@flow
+def eda(seed: int = 1):
+    """Run the EDA build.
+
+    :mainflow:
+    """
+```
+
+- `@mainflow` is a literal standalone docstring line, not a Python decorator.
+- YAML frontmatter is parsed only at the start of the docstring;
+  `mainflow: false` does not select the flow.
+- `:mainflow:` and `:mainflow: true` select the flow; `:mainflow: false` does
+  not.
+- A true marker wins over a false marker and emits a conflict warning.
+- Explicit selection with `prefect_main_flows` or a `prefect-flow` directive
+  overrides markers.
+- All marker syntax is stripped from the rendered description.
+- Malformed YAML or an invalid marker value follows `prefect_on_error`.
+
+The [example project](examples/demo/) demonstrates all three forms.
+
 ## Runtime flow graphs
 
 Flow graphs come from Prefect's runtime visualization. Generating one executes
@@ -161,7 +237,26 @@ renders the graph without the flow description or parameter table:
 The graph styles the main flow, subflows, tasks, and unknown nodes, and adds a
 legend. Missing sample arguments, unsupported `.submit()` / `.map()` calls,
 missing Prefect run context, and execution failures follow `prefect_on_error`
-and omit the graph. A graph records one execution path; subflows are leaves.
+and omit the graph.
+
+Limitations and safety:
+
+- **One execution path.** Only the branches taken with the configured sample
+  arguments appear. Change the sample arguments to document a different path.
+- **Subflows are leaves.** A subflow's internal tasks are not expanded and no
+  recursive graph is generated. Add a separate directive for its internals.
+- **Deployment calls are invisible.** Flows started with `arun_deployment()` or
+  `run_deployment()` are not tracked; document them with explicit directives.
+- **Asynchronous task calls are unsupported.** `.submit()`, `.map()`, and
+  `.apply_async()` raise Prefect's `VisualizationUnsupportedError`, so the
+  graph is omitted.
+- **The flow body executes.** Enabling a graph is an explicit decision to run
+  user code that may perform I/O, read credentials, or write files. There is no
+  sandbox.
+- **Sample arguments are passed as-is.** Prefect calls the flow function with
+  the configured values without validating them against the flow's Pydantic
+  parameter model. When a parameter is a model, construct the model instance in
+  `conf.py`; a plain dictionary is not coerced.
 
 Graph nodes that match module-level `Flow` and `Task` objects also get
 **Subflows** and **Tasks** sections with their description, signature,
@@ -190,6 +285,29 @@ Flow and task source files and external description files are registered with
 incremental mode. The extension declares `parallel_read_safe = False` because
 runtime DAG generation executes user code, and `parallel_write_safe = True`.
 v0.1 has no custom DAG cache and no subprocess isolation.
+
+## Documentation and example
+
+The extension's own documentation lives under `docs/` and builds with
+`-W` (warnings are errors):
+
+```bash
+uv sync --extra markdown
+uv run sphinx-build -W -b html docs docs/_build/html
+```
+
+The [example project](examples/demo/) exercises every directive, all three
+main-flow marker forms, scalar and nested Pydantic parameters, a runtime graph,
+subflows, tasks, an index page, and a standalone flow page. Its `conf.py`
+contains a working `prefect_dag_sample_args` entry:
+
+```bash
+uv run sphinx-build -W -b html examples/demo examples/demo/_build/html
+```
+
+CI builds both projects with `-W`, inspects the wheel and sdist, and installs
+the built wheel into a clean virtual environment before rebuilding the example.
+See the [release checklist](docs/release.md) for the publication steps.
 
 ## Development
 
