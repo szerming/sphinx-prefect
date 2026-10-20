@@ -4,8 +4,8 @@ This guide shows how to document Prefect flows in a Sphinx project with
 `sphinx-contrib-prefect`.
 
 The guide describes the currently implemented `prefect-flow`,
-`prefect-params`, and `prefect-flow-index` directives and marks features that
-are planned for the rest of v0.1. For the full design, see
+`prefect-params`, `prefect-dag`, and `prefect-flow-index` directives and marks
+features that are planned for the rest of v0.1. For the full design, see
 the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 
 ## Current status
@@ -22,7 +22,7 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | `prefect_on_error` warn/error policy | Available |
 | Parameter tables from Prefect's parameter schema | Available |
 | Pydantic model documentation with nested models | Available |
-| Runtime Mermaid flow graph | Planned — [#7](https://github.com/szerming/sphinx-prefect/issues/7) |
+| Runtime Mermaid flow graph with `:show-dag:` and `prefect-dag` | Available |
 | Subflow/task sections and cross-references | Planned — [#8](https://github.com/szerming/sphinx-prefect/issues/8) |
 
 ## Installation
@@ -118,6 +118,13 @@ prefect_on_error = "warn"
 # flows without a docstring marker.
 prefect_modules = ["flows"]
 prefect_main_flows = ["flows.eda"]
+
+# Optional: runtime DAG generation. It executes the flow body, so it is off by
+# default. Sample arguments are keyed by flow entrypoint.
+prefect_dag_enabled = False
+prefect_dag_sample_args = {
+    "flows.eda": {"records": 10},
+}
 ```
 
 `sphinxcontrib.prefect` loads `sphinx.ext.autodoc`,
@@ -186,7 +193,8 @@ For each flow, the directive emits:
 - a **Parameters** table when the flow declares parameters;
 - a `pydantic-model` block for each Pydantic model used by a parameter,
   including nested models;
-- any directive body content, after the description.
+- a styled Mermaid flow graph when a runtime DAG is enabled;
+- any directive body content, after the description and graph.
 
 A flow with no docstring or description renders normally; the description is
 simply omitted. A flow with no parameters omits the parameter table.
@@ -313,6 +321,76 @@ model blocks without the description or flow graph, use `prefect-params`:
 The directive accepts the same `module.qualname` and `module:qualname`
 entrypoint forms as `prefect-flow`.
 
+## Runtime flow graphs
+
+Flow graphs are produced by Prefect's `Flow.generate_mermaid_graph()`. That API
+executes the flow body under Prefect's visualization tracker, so graph
+generation is not side-effect-free. It is always opt-in:
+
+- `:show-dag:` on `prefect-flow` or `prefect-flow-index` enables the graph for
+  those sections;
+- `prefect_dag_enabled = True` enables it for every `prefect-flow` section
+  unless the directive uses `:no-dag:`;
+- `prefect-dag` always attempts generation and renders only the graph;
+- `:show-dag:` wins when a directive has both `:show-dag:` and `:no-dag:`.
+
+```rst
+.. prefect-flow:: flows.eda
+   :show-dag:
+```
+
+```rst
+.. prefect-dag:: flows.eda
+```
+
+The graph needs sample arguments for required flow parameters. Configure them
+by canonical entrypoint:
+
+```python
+prefect_dag_sample_args = {
+    "flows.eda": {"records": 10},
+}
+```
+
+A flow without required parameters runs with `{}`. If required parameters have
+no configured values, the directive warns and omits the graph. Invalid
+argument names or values, `.submit()` / `.map()` / `.apply_async()` calls,
+code that needs an active flow-run context, and other execution failures also
+warn and omit the graph by default. Under `prefect_on_error = "error"` they
+fail the build instead.
+
+The rendered diagram adds a main-flow node when Prefect's output omits it,
+draws edges from the main flow to the graph's root nodes, and applies
+`classDef` styles: indigo for the main flow, blue for subflows, green for
+tasks, and amber for unknown nodes. It appears under a **Flow graph** heading,
+and a text legend names each color. The `prefect-dag` directive gives its
+section the stable anchor `prefect-dag-<slug>`. When the flow body calls
+neither tasks nor subflows, the directive renders a short note instead of an
+empty diagram.
+
+Unknown nodes are graph names that cannot be matched to a `Flow` or `Task`
+object in the flow's module. A name that matches more than one object is also
+styled as unknown and emits a warning. Their documentation is handled by
+[#8](https://github.com/szerming/sphinx-prefect/issues/8).
+
+### Graph limitations and safety
+
+- Enabling a graph is an explicit decision to execute user flow code. The body
+  may perform I/O, read credentials, or write files. There is no sandbox.
+- One execution path is observed. Branches that the sample arguments do not
+  take do not appear.
+- Subflows appear as leaf nodes. Their internal tasks are not expanded; use a
+  separate directive to document a subflow's internals.
+- Flows started with `arun_deployment()` or `run_deployment()` are not tracked.
+- A pure flow needs no Prefect server. The build can run with
+  `PREFECT_API_URL` pointing at an unreachable address.
+- The HTML builder uses `sphinxcontrib-mermaid`'s inline rendering. The
+  text/man builders emit its `[graph]` placeholder. LaTeX/PDF output needs the
+  `mmdc` Mermaid CLI binary on `PATH`; without it, `sphinxcontrib-mermaid`
+  warns and skips the image.
+- The extension does not cache generated graphs or run flow code in a
+  subprocess. Sphinx incremental rebuilds and dependency tracking apply.
+
 ## Main-flow markers
 
 A flow can be marked as a **main flow** in its docstring using any of three
@@ -399,10 +477,9 @@ For example, with two marked flows and one unmarked flow in `flows`, only the
 two marked flows render. A flow named in both `prefect_main_flows` and a
 scanned module still renders once.
 
-The directive takes no arguments. The `:show-dag:` and `:no-dag:` options are
-accepted for forward compatibility; they will apply to every generated section
-once the runtime DAG lands in
-[#7](https://github.com/szerming/sphinx-prefect/issues/7).
+The directive takes no arguments. The `:show-dag:` and `:no-dag:` options
+apply to every generated section and follow the same enablement rules as
+`prefect-flow`.
 
 Module scanning imports user modules, so import-time side effects run during
 the build. Only point `prefect_modules` at modules that are safe to import.
@@ -434,6 +511,8 @@ Typical causes are:
 - a `:description-from:` path does not exist or cannot be read;
 - a `.md` description is used without the `markdown` extra;
 - a docstring marker has malformed YAML or an invalid value;
+- a runtime DAG has no sample arguments for a required parameter, receives
+  invalid arguments, or fails while executing the flow body;
 - a parameter's Pydantic model is a Pydantic v1 model, a local or nested
   class, or a dynamically generated class that cannot be imported by name;
 - a module in `prefect_modules` or a `prefect_main_flows` entry cannot be
@@ -442,16 +521,16 @@ Typical causes are:
 ## Current limitations and safety
 
 - Parameter tables and Pydantic model documentation cover flows. Task
-  parameters, graphs, and subflow/task sections are tracked in the
-  [issue tracker](https://github.com/szerming/sphinx-prefect/issues).
+  parameter sections and subflow/task cross-reference sections are tracked in
+  [#8](https://github.com/szerming/sphinx-prefect/issues/8).
 - Docstrings and external `.rst` files are treated as reStructuredText.
   External Markdown descriptions are opt-in through the `markdown` extra and
   are parsed as MyST; MyST docstrings are not supported.
 - `prefect-flow-index` imports configured modules during the build. It does not
   sandbox them, so import-time side effects are possible.
-- The directive imports the flow's module but does not execute the flow body.
-  The planned runtime DAG feature will execute it when explicitly enabled; see
-  [ADR-0001](adr/0001-runtime-prefect-dag.md).
+- `prefect-flow` imports the flow's module but does not execute the flow body
+  unless a runtime DAG is enabled. Graph generation executes arbitrary flow code
+  and may perform I/O; see [ADR-0001](adr/0001-runtime-prefect-dag.md).
 - Runtime graph generation observes one execution path, so it cannot show
   branches that were not taken. Subflows are rendered as leaves.
 - The extension targets Sphinx 9. It is not tested with Sphinx 8.

@@ -8,6 +8,7 @@ from docutils import nodes
 from docutils.parsers.rst import directives
 from sphinx.util.docutils import SphinxDirective
 
+from sphinxcontrib.prefect._dag import render_flow_graph
 from sphinxcontrib.prefect._errors import (
     report_diagnostics,
     report_error,
@@ -17,7 +18,9 @@ from sphinxcontrib.prefect._import import ObjectResolutionError, resolve_flow
 from sphinxcontrib.prefect._markers import parse_mainflow_markers
 from sphinxcontrib.prefect._models import ModelCollection, collect_flow_models
 from sphinxcontrib.prefect._render import (
+    dag_node_id,
     flow_node_id,
+    make_section,
     params_node_id,
     render_directive_content,
     render_flow_section,
@@ -50,6 +53,14 @@ def _collect_models_or_report(
     return models
 
 
+def _include_dag(directive: SphinxDirective) -> bool:
+    """Return whether a ``prefect-flow`` section should include a runtime DAG."""
+    if "show-dag" in directive.options:
+        return True
+    enabled = bool(directive.config.prefect_dag_enabled)
+    return enabled and "no-dag" not in directive.options
+
+
 class PrefectFlowDirective(SphinxDirective):
     """Render the description and metadata of a Prefect flow."""
 
@@ -58,7 +69,9 @@ class PrefectFlowDirective(SphinxDirective):
     final_argument_whitespace = False
     has_content = True
     option_spec: ClassVar[dict[str, Any]] = {
-        "description-from": directives.unchanged_required
+        "description-from": directives.unchanged_required,
+        "show-dag": directives.flag,
+        "no-dag": directives.flag,
     }
 
     def run(self) -> list[nodes.Node]:
@@ -79,6 +92,7 @@ class PrefectFlowDirective(SphinxDirective):
             markers,
             models,
             description_from=self.options.get("description-from"),
+            include_dag=_include_dag(self),
         )
         if self.content:
             render_directive_content(self, section)
@@ -109,6 +123,28 @@ class PrefectParamsDirective(SphinxDirective):
                 include_description=False,
             )
         ]
+
+
+class PrefectDagDirective(SphinxDirective):
+    """Render only a flow's runtime Mermaid graph."""
+
+    required_arguments = 1
+    optional_arguments = 0
+    final_argument_whitespace = False
+    has_content = False
+
+    def run(self) -> list[nodes.Node]:
+        flow = _resolve_or_report(self, self.arguments[0])
+        if flow is None:
+            return []
+
+        section = make_section(
+            self,
+            flow.name or type(flow).__name__,
+            node_id=dag_node_id(flow),
+        )
+        render_flow_graph(self, section, flow)
+        return [section]
 
 
 class PrefectFlowIndexDirective(SphinxDirective):
@@ -145,6 +181,7 @@ class PrefectFlowIndexDirective(SphinxDirective):
             return []
 
         sections: list[nodes.Node] = []
+        include_dag = _include_dag(self)
         for selection in result.flows:
             models = _collect_models_or_report(self, selection.flow)
             sections.append(
@@ -154,6 +191,7 @@ class PrefectFlowIndexDirective(SphinxDirective):
                     selection.markers,
                     models,
                     node_id=flow_node_id(selection.flow),
+                    include_dag=include_dag,
                 )
             )
         return sections

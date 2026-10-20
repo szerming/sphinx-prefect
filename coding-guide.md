@@ -37,6 +37,8 @@ src/sphinxcontrib/prefect/
 ├── _description.py   # docstring and external-file description resolution
 ├── _params.py        # parameter table rendering
 ├── _models.py        # Pydantic model discovery and pydantic-model emission
+├── _dag.py           # runtime DAG invocation and graph section rendering
+├── _graph.py         # Mermaid parsing, node classification, and styling
 ├── _render.py        # doctree helpers and shared flow-section rendering
 └── _errors.py        # prefect_on_error handling and source-located diagnostics
 
@@ -44,7 +46,9 @@ tests/
 ├── conftest.py
 ├── roots/
 │   ├── test-flow/    # flow directive, fixture flows, models, descriptions
-│   └── test-index/   # module scan and prefect-flow-index
+│   ├── test-index/   # module scan and prefect-flow-index
+│   └── test-dag/     # runtime DAG graph, errors, and builder coverage
+├── test_dag.py
 ├── test_flow_directive.py
 ├── test_index_directive.py
 ├── test_markers.py
@@ -156,7 +160,8 @@ Keep parameter table construction in `_params.py` and model discovery in
   `report_diagnostics()`; `render_flow_section()` only assembles nodes.
 
 `render_flow_section()` owns the shared order: metadata fields, optional
-description, parameter table and models, then directive body content.
+description, parameter table and models, optional runtime graph, then directive
+body content.
 
 ### Module scanning
 
@@ -175,6 +180,36 @@ rules in `_scan.py`:
 - parse each flow's markers once, even when it appears in several modules or
   under an alias;
 - never import Prefect or user modules until the directive runs.
+
+### Runtime DAGs
+
+Keep graph execution in `_dag.py` and pure Mermaid work in `_graph.py`.
+
+- `_dag.generate_graph()` resolves sample arguments from
+  `prefect_dag_sample_args` by canonical entrypoint. A flow with required
+  parameters and no entry is an error; a flow with no required parameters runs
+  with `{}`.
+- Call `flow.generate_mermaid_graph(**args)` only after a directive opts in.
+  Catch execution failures, including Prefect's `VisualizationUnsupportedError`
+  and `MissingContextError`, and route them through `report_error()`.
+- `_graph.parse_mermaid()` is pure. It parses Prefect's node and edge lines,
+  strips the `-0`, `-1`, ... duplicate-node suffix, and preserves unrecognized
+  lines so a newer Prefect graph is not silently truncated.
+- `_graph.classify_nodes()` matches stripped labels to module-level `Flow` and
+  `Task` objects by `obj.name`. Unknown or ambiguous names are styled as
+  unknown nodes, and ambiguous names produce a warning that the directive
+  reports through `report_diagnostics()`.
+- `_graph.build_diagram()` adds the main-flow node when Prefect omits it, draws
+  edges to root nodes, and appends `classDef` styles. Pass the result of
+  `classify_nodes()` with `preclassified=True` so the flow module is scanned
+  once. Do not add links inside the Mermaid source; subflow/task links belong
+  in rendered sections.
+- `prefect-flow` enablement lives in `_directives._include_dag()`:
+  `:show-dag:` wins, otherwise `prefect_dag_enabled` applies unless `:no-dag:`
+  is present. `prefect-dag` always attempts generation.
+- Render a note instead of a diagram when the flow body calls no tasks or
+  subflows. Follow the Mermaid node with a text legend.
+- Subflow graphs are leaves. Do not recurse.
 
 ### Error policy
 
@@ -226,12 +261,23 @@ roots as `tests/roots/test-<name>`.
 - `tests/roots/test-index/` contains scanned modules, an explicit flow outside
   them, unmarked flows, duplicate flow names, malformed markers, a wrong-type
   object, and a module that raises on import.
+- `tests/roots/test-dag/` contains a pure flow with two tasks and a subflow,
+  an empty flow, a flow with required sample arguments, a `.submit()` flow, a
+  flow that needs a Prefect run context, a task defined outside the flow's
+  module for unknown-node styling, and ambiguous names (a flow and task that
+  share a name, plus two distinct tasks with the same name). Its flows write a
+  marker file so tests can prove whether the body executed.
 - `tests/test_markers.py` unit-tests marker forms, precedence, stripping, and
   malformed YAML.
 - `tests/test_scan.py` unit-tests scan order, explicit-flow inclusion,
   deduplication, entrypoint normalization, and scan diagnostics.
 - `tests/test_index_directive.py` covers rendered order, selection, `:show-dag:`
   and `:no-dag:`, empty scans, and warn/error behavior for scan failures.
+- `tests/test_dag.py` covers `:show-dag:`, global enablement, `:no-dag:`,
+  `prefect-dag`, styled nodes and legend, unknown and ambiguous nodes, empty
+  graphs, missing and invalid sample arguments, `.submit()` and
+  runtime-context failures, offline builds, the text and man builders, and
+  Mermaid parsing.
 - `tests/test_parameters.py` covers scalar rows, Google-style descriptions,
   model cross-references, nested and recursive models, RootModel unwrapping,
   dynamic and Pydantic v1 diagnostics, cross-page model deduplication, and

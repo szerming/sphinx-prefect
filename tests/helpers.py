@@ -33,19 +33,24 @@ def copy_test_root(
     return src
 
 
-def create_app(make_app: Any, src: Path) -> Any:
-    """Create an HTML test app for *src* without building it."""
+def create_app(
+    make_app: Any,
+    src: Path,
+    *,
+    builder: str = "html",
+) -> Any:
+    """Create a test app for *src* without building it."""
     return make_app(
-        "html",
+        builder,
         srcdir=src,
         builddir=src / "_build",
         warningiserror=False,
     )
 
 
-def build(make_app: Any, src: Path) -> Any:
-    """Build *src* with the HTML builder and return the test app."""
-    app = create_app(make_app, src)
+def build(make_app: Any, src: Path, *, builder: str = "html") -> Any:
+    """Build *src* with *builder* and return the test app."""
+    app = create_app(make_app, src, builder=builder)
     app.build()
     return app
 

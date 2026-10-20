@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from docutils import nodes
 
+from sphinxcontrib.prefect._dag import render_flow_graph
 from sphinxcontrib.prefect._description import (
     read_description_file,
     render_external_description,
@@ -78,6 +79,11 @@ def params_node_id(flow: Flow) -> str:
     return nodes.make_id(f"prefect-params-{flow_entrypoint(flow)}")
 
 
+def dag_node_id(flow: Flow) -> str:
+    """Return a stable, unique section id for *flow*'s DAG section."""
+    return nodes.make_id(f"prefect-dag-{flow_entrypoint(flow)}")
+
+
 def render_flow_section(
     directive: SphinxDirective,
     flow: Flow,
@@ -87,6 +93,7 @@ def render_flow_section(
     description_from: str | None = None,
     node_id: str | None = None,
     include_description: bool = True,
+    include_dag: bool = False,
 ) -> nodes.section:
     """Render a flow section for ``prefect-flow`` or ``prefect-params``."""
     section = make_section(
@@ -115,5 +122,7 @@ def render_flow_section(
 
     render_parameter_table(directive, section, flow, models)
     render_model_sections(directive, section, models.models)
+    if include_dag:
+        render_flow_graph(directive, section, flow)
 
     return section

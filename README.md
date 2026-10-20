@@ -11,16 +11,18 @@ for self-contained flows.
 **Status:** v0.1 is in development. The package scaffold, the core
 `prefect-flow` and `prefect-params` directives, main-flow docstring markers,
 external RST and MyST Markdown descriptions, module scanning with
-`prefect-flow-index`, parameter tables, and Pydantic model documentation are
+`prefect-flow-index`, parameter tables, Pydantic model documentation, and
+runtime Mermaid flow graphs with `:show-dag:` and `prefect-dag` are
 implemented. The remaining work is tracked in
-issues [#7–#10](https://github.com/szerming/sphinx-prefect/issues).
+issues [#8–#10](https://github.com/szerming/sphinx-prefect/issues).
 
 ## Project context
 
 Read these before changing behavior or architecture:
 
 - **[Usage guide](docs/guide.md)** — complete examples for documenting flows
-  with `prefect-flow`, `prefect-params`, and `prefect-flow-index`.
+  with `prefect-flow`, `prefect-params`, `prefect-dag`, and
+  `prefect-flow-index`.
 - **[v0.1 specification](docs/specs/0001-sphinx-prefect-v0.1.md)** — goals,
   behavior, compatibility, and the ticket map.
 - **[Architecture decision records](docs/adr/)** — accepted design decisions:
@@ -126,14 +128,43 @@ section per flow that has a true marker or an entry in `prefect_main_flows`.
 Flows are ordered by module list order and then attribute order; explicit
 flows outside `prefect_modules` follow in configuration order. Module scanning
 imports user code, so import-time side effects may run during the build.
-`:show-dag:` and `:no-dag:` are accepted for forward compatibility and will
-apply to every generated section when
-[#7](https://github.com/szerming/sphinx-prefect/issues/7) lands.
+`:show-dag:` and `:no-dag:` apply to every generated section.
 
-The planned v0.1 interface also includes `prefect-dag`. See the
-[usage guide](docs/guide.md) for marker syntax, a complete project, parameter
-and model details, error handling, current limitations, and the full planned
-interface.
+## Runtime flow graphs
+
+Flow graphs come from Prefect's runtime visualization. Generating one executes
+the flow body, so it is opt-in and may perform I/O, read credentials, or write
+files. Enable it for one directive:
+
+```rst
+.. prefect-flow:: mypkg.flows.eda
+   :show-dag:
+```
+
+Or enable it globally, with sample arguments for required parameters:
+
+```python
+prefect_dag_enabled = False
+prefect_dag_sample_args = {
+    "mypkg.flows.eda": {"seed": 42},
+}
+```
+
+`:no-dag:` suppresses a globally enabled graph. `prefect-dag` always opts in and
+renders only the graph:
+
+```rst
+.. prefect-dag:: mypkg.flows.eda
+```
+
+The graph styles the main flow, subflows, tasks, and unknown nodes, and adds a
+legend. Missing sample arguments, unsupported `.submit()` / `.map()` calls,
+missing Prefect run context, and execution failures follow `prefect_on_error`
+and omit the graph. A graph records one execution path; subflows are leaves.
+The text/man builders render Mermaid's `[graph]` placeholder, and LaTeX/PDF
+output needs the `mmdc` binary. See the
+[usage guide](docs/guide.md#runtime-flow-graphs) for enablement, sample
+arguments, failure behavior, and limitations.
 
 ## Development
 

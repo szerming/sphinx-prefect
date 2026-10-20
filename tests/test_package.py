@@ -64,11 +64,14 @@ def test_setup_requires_sphinx_9_and_dependencies() -> None:
     assert app.config_values == [
         ("prefect_modules", [], "env"),
         ("prefect_main_flows", [], "env"),
+        ("prefect_dag_enabled", False, "env"),
+        ("prefect_dag_sample_args", {}, "env"),
         ("prefect_on_error", "warn", "env"),
     ]
     assert app.directives == [
         "prefect-flow",
         "prefect-params",
+        "prefect-dag",
         "prefect-flow-index",
     ]
 

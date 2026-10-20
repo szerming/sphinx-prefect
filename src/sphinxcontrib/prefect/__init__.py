@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sphinxcontrib.prefect._directives import (
+    PrefectDagDirective,
     PrefectFlowDirective,
     PrefectFlowIndexDirective,
     PrefectParamsDirective,
@@ -25,9 +26,12 @@ def setup(app: Sphinx) -> dict[str, Any]:
 
     app.add_config_value("prefect_modules", [], "env", types=list)
     app.add_config_value("prefect_main_flows", [], "env", types=list)
+    app.add_config_value("prefect_dag_enabled", False, "env", types=bool)
+    app.add_config_value("prefect_dag_sample_args", {}, "env", types=dict)
     app.add_config_value("prefect_on_error", "warn", "env", types=str)
     app.add_directive("prefect-flow", PrefectFlowDirective)
     app.add_directive("prefect-params", PrefectParamsDirective)
+    app.add_directive("prefect-dag", PrefectDagDirective)
     app.add_directive("prefect-flow-index", PrefectFlowIndexDirective)
 
     return {
