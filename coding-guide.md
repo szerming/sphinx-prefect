@@ -31,15 +31,15 @@ Apply formatting with `uv run ruff format .`.
 src/sphinxcontrib/prefect/
 ├── __init__.py       # setup(), config registration, directive registration
 ├── _directives.py    # directive classes and option handling
-├── _import.py        # lazy module/flow resolution
+├── _import.py        # lazy flow resolution and callable entrypoints
 ├── _markers.py       # main-flow docstring marker parsing
 ├── _scan.py          # module scanning and main-flow selection
 ├── _description.py   # docstring and external-file description resolution
 ├── _params.py        # parameter table rendering
 ├── _models.py        # Pydantic model discovery and pydantic-model emission
 ├── _dag.py           # runtime DAG invocation and graph section rendering
-├── _graph.py         # Mermaid parsing, node classification, and styling
-├── _render.py        # doctree helpers and shared flow-section rendering
+├── _graph.py         # Mermaid parsing, node matching, and styling
+├── _render.py        # doctree helpers, flow and related-node sections
 └── _errors.py        # prefect_on_error handling and source-located diagnostics
 
 tests/
@@ -138,17 +138,18 @@ docstring, and do not pass Markdown through `inspect.cleandoc`.
 Keep parameter table construction in `_params.py` and model discovery in
 `_models.py`.
 
-- Read parameter metadata from `flow.parameters.model_dump()` and order it by
-  each property's `position`.
+- Read parameter metadata from `flow.parameters.model_dump()` for flows and
+  from `prefect.utilities.callables.parameter_schema(task.fn).model_dump()` for
+  tasks. Order properties by their `position`.
 - Use the signature annotations (`typing.get_type_hints(..., include_extras=True)`)
   for display types and for identifying model parameters; use the Prefect schema
-  for requiredness, defaults, and descriptions. `collect_flow_models()` returns
-  the resolved hints so the table and model walker share one lookup.
+  for requiredness, defaults, and descriptions. `collect_callable_models()`
+  returns the resolved hints so the table and model walker share one lookup.
 - Link documented Pydantic models with Python-domain `pending_xref` nodes. Do
   not hand-write URLs.
-- `_models.collect_flow_models()` walks `Annotated`, unions, container
+- `_models.collect_callable_models()` walks `Annotated`, unions, container
   generics, and `model_fields`, keyed by `(module, qualname)` so recursive
-  models terminate.
+  models terminate. `collect_flow_models()` is the flow-owner wrapper.
 - Accept only importable module-level Pydantic v2 classes. Pydantic v1, local,
   nested, and non-importable dynamic models are diagnostics routed through
   `prefect_on_error`.
@@ -160,8 +161,10 @@ Keep parameter table construction in `_params.py` and model discovery in
   `report_diagnostics()`; `render_flow_section()` only assembles nodes.
 
 `render_flow_section()` owns the shared order: metadata fields, optional
-description, parameter table and models, optional runtime graph, then directive
-body content.
+description, parameter table and models, optional runtime graph, related
+subflow/task/unknown sections, then directive body content. It returns a
+`RenderResult` holding the section and collected diagnostics; the directive
+reports them and appends its body content.
 
 ### Module scanning
 
@@ -196,9 +199,11 @@ Keep graph execution in `_dag.py` and pure Mermaid work in `_graph.py`.
   strips the `-0`, `-1`, ... duplicate-node suffix, and preserves unrecognized
   lines so a newer Prefect graph is not silently truncated.
 - `_graph.classify_nodes()` matches stripped labels to module-level `Flow` and
-  `Task` objects by `obj.name`. Unknown or ambiguous names are styled as
-  unknown nodes, and ambiguous names produce a warning that the directive
-  reports through `report_diagnostics()`.
+  `Task` objects by `obj.name`, retaining the matched object on
+  `GraphNode.obj`. `ParsedGraph.matched_nodes`, `.ambiguous_nodes`, and
+  `.unknown_nodes` expose the three groups. Unknown or ambiguous names are
+  styled as unknown nodes, and ambiguous names produce a warning that the
+  directive reports through `report_diagnostics()`.
 - `_graph.build_diagram()` adds the main-flow node when Prefect omits it, draws
   edges to root nodes, and appends `classDef` styles. Pass the result of
   `classify_nodes()` with `preclassified=True` so the flow module is scanned
@@ -209,7 +214,25 @@ Keep graph execution in `_dag.py` and pure Mermaid work in `_graph.py`.
   is present. `prefect-dag` always attempts generation.
 - Render a note instead of a diagram when the flow body calls no tasks or
   subflows. Follow the Mermaid node with a text legend.
-- Subflow graphs are leaves. Do not recurse.
+- `_render.render_graph_node_sections()` turns a classified graph into
+  **Subflows**, **Tasks**, and **Unknown nodes** sections and returns their
+  marker and model diagnostics. Directives report those diagnostics through
+  `report_diagnostics()`; the rendering helpers do not log. Matched nodes are
+  deduplicated by object identity and keep graph order. The first bullet list
+  in each section links names to the generated sections with standard-domain
+  `:ref:` targets; unknown and ambiguous names stay unlinked. The main flow
+  and each related node register their source file with
+  `env.note_dependency()`. `prefect-dag` calls the same helper after rendering
+  its graph.
+- Generated flow and task sections use `prefect-flow-<entrypoint>` and
+  `prefect-task-<entrypoint>` ids. `_render.make_section()` suffixes duplicate
+  ids within one document and only registers a standard-domain label the first
+  time a name appears in the build, so repeated subflows do not emit duplicate
+  label warnings.
+- Subflow sections render as leaves: title, entrypoint, signature, description,
+  parameter table, and models. Task sections use `task.fn` and
+  `parameter_schema(task.fn)`. Do not generate a graph for a subflow and do not
+  list its internal tasks under the main flow.
 
 ### Error policy
 
@@ -261,11 +284,13 @@ roots as `tests/roots/test-<name>`.
 - `tests/roots/test-index/` contains scanned modules, an explicit flow outside
   them, unmarked flows, duplicate flow names, malformed markers, a wrong-type
   object, and a module that raises on import.
-- `tests/roots/test-dag/` contains a pure flow with two tasks and a subflow,
-  an empty flow, a flow with required sample arguments, a `.submit()` flow, a
-  flow that needs a Prefect run context, a task defined outside the flow's
-  module for unknown-node styling, and ambiguous names (a flow and task that
-  share a name, plus two distinct tasks with the same name). Its flows write a
+- `tests/roots/test-dag/` contains a pure flow with two tasks and a subflow
+  whose body contains its own task, an empty flow, a flow with required sample
+  arguments, a flow with a task that takes a Pydantic model, a `.submit()`
+  flow, a flow that needs a Prefect run context, a task defined outside the
+  flow's module for unknown-node styling, ambiguous names (a flow and task
+  that share a name, plus two distinct tasks with the same name), and a
+  separate module whose subflow has malformed marker syntax. Its flows write a
   marker file so tests can prove whether the body executed.
 - `tests/test_markers.py` unit-tests marker forms, precedence, stripping, and
   malformed YAML.
@@ -276,8 +301,10 @@ roots as `tests/roots/test-<name>`.
 - `tests/test_dag.py` covers `:show-dag:`, global enablement, `:no-dag:`,
   `prefect-dag`, styled nodes and legend, unknown and ambiguous nodes, empty
   graphs, missing and invalid sample arguments, `.submit()` and
-  runtime-context failures, offline builds, the text and man builders, and
-  Mermaid parsing.
+  runtime-context failures, offline builds, the text and man builders, Mermaid
+  parsing, subflow/task/unknown sections, task parameter tables and models,
+  stable anchors, cross-reference links, and related-node warn/strict
+  diagnostics.
 - `tests/test_parameters.py` covers scalar rows, Google-style descriptions,
   model cross-references, nested and recursive models, RootModel unwrapping,
   dynamic and Pydantic v1 diagnostics, cross-page model deduplication, and

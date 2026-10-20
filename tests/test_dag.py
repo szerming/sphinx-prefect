@@ -57,6 +57,26 @@ def executed(src: Path) -> bool:
     return (src / "dag_pkg" / "executed.txt").exists()
 
 
+def parameter_rows(section: nodes.Element) -> list[list[str]]:
+    """Return the text of every parameter-table row in *section*."""
+    tables = [
+        table
+        for table in section.findall(nodes.table)
+        if table.next_node(nodes.title) is not None
+        and table.next_node(nodes.title).astext() == "Parameters"
+    ]
+    assert len(tables) == 1
+    return [
+        [entry.astext() for entry in row.findall(nodes.entry)]
+        for row in tables[0].findall(nodes.row)
+    ]
+
+
+def field_names(section: nodes.Element) -> list[str]:
+    """Return the field names in *section*."""
+    return [field[0].astext() for field in section.findall(nodes.field)]
+
+
 def test_show_dag_renders_styled_graph(make_app: Any, tmp_path: Path) -> None:
     src = make_src(tmp_path)
 
@@ -95,6 +115,80 @@ def test_show_dag_renders_styled_graph(make_app: Any, tmp_path: Path) -> None:
     assert "unknown node" in html
 
 
+def test_subflow_and_task_sections_render(make_app: Any, tmp_path: Path) -> None:
+    src = make_src(tmp_path)
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    doctree = app.env.get_doctree("index")
+    titles = [
+        title.astext()
+        for title in doctree.findall(nodes.title)
+        if isinstance(title.parent, nodes.section)
+    ]
+    assert "Subflows" in titles
+    assert "Tasks" in titles
+
+    subflow = find_section(doctree, "transform")
+    assert subflow is not None
+    assert field_names(subflow) == ["Entrypoint", "Signature"]
+    assert "dag_pkg.flows.transform" in subflow.astext()
+    assert "Transform rows in a subflow." in subflow.astext()
+    assert "rows: 'list[int]'" in subflow.astext()
+    assert parameter_rows(subflow)[1][0] == "rows"
+
+    task = find_section(doctree, "extract")
+    assert task is not None
+    assert field_names(task) == ["Signature"]
+    assert "Extract a sample of records." in task.astext()
+    assert "records: 'int'" in task.astext()
+    assert parameter_rows(task)[1][0] == "records"
+
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert 'id="prefect-flow-dag-pkg-flows-transform"' in html
+    assert 'href="#prefect-flow-dag-pkg-flows-transform"' in html
+    assert 'id="prefect-task-dag-pkg-flows-extract"' in html
+    assert 'href="#prefect-task-dag-pkg-flows-extract"' in html
+
+
+def test_repeated_graph_nodes_document_one_section(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "DAG test\n========\n\n"
+        ".. prefect-flow:: dag_pkg.flows.with_repeated_task\n"
+        "   :show-dag:\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    code = graph_code(app, "with-repeated-task")
+    assert 'extract_0["extract-0"]' in code
+    assert 'extract_1["extract-1"]' in code
+    titles = [
+        title.astext()
+        for title in app.env.get_doctree("index").findall(nodes.title)
+        if isinstance(title.parent, nodes.section)
+    ]
+    assert titles.count("extract") == 1
+
+
+def test_subflow_contents_are_not_expanded(make_app: Any, tmp_path: Path) -> None:
+    src = make_src(tmp_path)
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert "summarize" not in graph_code(app)
+    assert find_section(app.env.get_doctree("index"), "summarize") is None
+
+
 def test_dag_disabled_does_not_execute_flow(make_app: Any, tmp_path: Path) -> None:
     src = make_src(
         tmp_path,
@@ -106,6 +200,9 @@ def test_dag_disabled_does_not_execute_flow(make_app: Any, tmp_path: Path) -> No
     assert app.statuscode == 0
     assert not app.warning.getvalue()
     assert not executed(src)
+    assert any(
+        str(path).endswith("dag_pkg/flows.py") for path in app.env.dependencies["index"]
+    )
     section = find_section(app.env.get_doctree("index"), "pipeline")
     assert section is not None
     assert section.next_node(mermaid) is None
@@ -201,7 +298,10 @@ def test_index_flags_apply_to_every_section(
     assert not app.warning.getvalue()
     assert executed(src)
     assert "flowchart TD" in graph_code(app)
-    assert find_section(app.env.get_doctree("index"), "needs-arguments") is None
+    doctree = app.env.get_doctree("index")
+    assert find_section(doctree, "Subflows") is not None
+    assert find_section(doctree, "Tasks") is not None
+    assert find_section(doctree, "needs-arguments") is None
 
 
 def test_index_no_dag_suppresses_graphs(
@@ -250,7 +350,10 @@ def test_empty_graph_renders_a_note(make_app: Any, tmp_path: Path) -> None:
     assert "No tasks or subflows were observed" in note.astext()
 
 
-def test_unknown_nodes_are_styled(make_app: Any, tmp_path: Path) -> None:
+def test_unknown_nodes_are_styled_and_listed_without_a_link(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
     src = make_src(
         tmp_path,
         "DAG test\n========\n\n"
@@ -264,6 +367,103 @@ def test_unknown_nodes_are_styled(make_app: Any, tmp_path: Path) -> None:
     code = graph_code(app, "with-unknown")
     assert 'external_task_0["external_task-0"]' in code
     assert "class external_task_0 prefectUnknown" in code
+
+    unknown = find_section(app.env.get_doctree("index"), "Unknown nodes")
+    assert unknown is not None
+    assert "external_task" in unknown.astext()
+    assert "unknown or external" in unknown.astext()
+
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert 'id="prefect-task-' not in html
+    assert 'href="#prefect-task-' not in html
+
+
+def test_malformed_subflow_marker_warns(make_app: Any, tmp_path: Path) -> None:
+    src = make_src(
+        tmp_path,
+        "DAG test\n========\n\n"
+        ".. prefect-flow:: dag_pkg.bad_markers.with_bad_subflow\n"
+        "   :show-dag:\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert "Malformed main-flow frontmatter" in app.warning.getvalue()
+    assert find_section(app.env.get_doctree("index"), "bad-subflow") is not None
+    assert any(
+        str(path).endswith("dag_pkg/bad_markers.py")
+        for path in app.env.dependencies["index"]
+    )
+
+
+def test_malformed_subflow_marker_raises_in_strict_mode(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "DAG test\n========\n\n"
+        ".. prefect-flow:: dag_pkg.bad_markers.with_bad_subflow\n"
+        "   :show-dag:\n",
+        config='prefect_on_error = "error"',
+    )
+
+    app = make_app(
+        "html",
+        srcdir=src,
+        builddir=src / "_build",
+        warningiserror=False,
+    )
+
+    with pytest.raises(SphinxError, match="Malformed main-flow frontmatter"):
+        app.build()
+
+
+def test_task_with_a_pydantic_model_parameter_is_documented(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "DAG test\n========\n\n"
+        ".. prefect-flow:: dag_pkg.flows.with_model_task\n"
+        "   :show-dag:\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    task = find_section(app.env.get_doctree("index"), "label")
+    assert task is not None
+    assert "Label a record." in task.astext()
+    assert parameter_rows(task)[1][1] == "Record"
+    assert "Record to label." in parameter_rows(task)[1][4]
+    assert "Record" in task.astext()
+    assert 'href="#prefect-task-dag-pkg-flows-label"' in (
+        app.outdir / "index.html"
+    ).read_text(encoding="utf-8")
+
+
+def test_prefect_dag_renders_related_sections(
+    make_app: Any,
+    tmp_path: Path,
+) -> None:
+    src = make_src(
+        tmp_path,
+        "DAG test\n========\n\n.. prefect-dag:: dag_pkg.flows.pipeline\n",
+    )
+
+    app = build(make_app, src)
+
+    assert app.statuscode == 0
+    assert not app.warning.getvalue()
+    doctree = app.env.get_doctree("index")
+    assert find_section(doctree, "Subflows") is not None
+    assert find_section(doctree, "Tasks") is not None
+    assert find_section(doctree, "transform") is not None
+    assert find_section(doctree, "extract") is not None
 
 
 def test_ambiguous_nodes_warn_and_are_styled_unknown(
@@ -285,6 +485,15 @@ def test_ambiguous_nodes_warn_and_are_styled_unknown(
     code = graph_code(app, "with-ambiguous")
     assert "class ambiguous_0 prefectUnknown" in code
 
+    unknown = find_section(app.env.get_doctree("index"), "Unknown nodes")
+    assert unknown is not None
+    assert "ambiguous name" in unknown.astext()
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert 'id="prefect-task-' not in html
+    assert 'id="prefect-flow-dag-pkg-flows-ambiguous"' not in html
+    assert 'href="#prefect-flow-dag-pkg-flows-ambiguous"' not in html
+    assert 'href="#prefect-task-' not in html
+
 
 def test_same_named_tasks_warn_and_are_styled_unknown(
     make_app: Any,
@@ -304,6 +513,13 @@ def test_same_named_tasks_warn_and_are_styled_unknown(
     code = graph_code(app, "with-same-named-tasks")
     assert "class twin_0 prefectUnknown" in code
     assert "class twin_1 prefectUnknown" in code
+
+    unknown = find_section(app.env.get_doctree("index"), "Unknown nodes")
+    assert unknown is not None
+    assert "twin" in unknown.astext()
+    html = (app.outdir / "index.html").read_text(encoding="utf-8")
+    assert 'id="prefect-task-' not in html
+    assert 'href="#prefect-task-' not in html
 
 
 def test_missing_sample_arguments_warn_and_omit(

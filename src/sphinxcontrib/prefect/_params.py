@@ -18,11 +18,9 @@ from sphinxcontrib.prefect._models import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from sphinx.util.docutils import SphinxDirective
-
-    from prefect import Flow
 
 _MISSING_DEFAULT = "—"
 _HEADERS = ("Parameter", "Type", "Required", "Default", "Description")
@@ -31,17 +29,17 @@ _HEADERS = ("Parameter", "Type", "Required", "Default", "Description")
 def render_parameter_table(
     directive: SphinxDirective,
     section: nodes.Element,
-    flow: Flow,
+    fn: Callable[..., Any],
+    schema: dict[str, Any],
     models: ModelCollection,
 ) -> None:
-    """Append a parameter table to *section* when *flow* has parameters."""
-    schema = flow.parameters.model_dump()
+    """Append a parameter table for *fn* to *section* when it has parameters."""
     properties = schema.get("properties") or {}
     if not properties:
         return
 
     required = set(schema.get("required") or ())
-    signature = inspect.signature(flow.fn)
+    signature = inspect.signature(fn)
     linked_targets = {model_target(model) for model in models.models}
     ordered = sorted(
         properties.items(),

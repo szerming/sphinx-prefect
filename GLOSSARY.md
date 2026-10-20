@@ -21,8 +21,14 @@ The directed graph observed during one sample execution of a flow, rendered as M
 _Avoid_: Pipeline, DAG (except when quoting Prefect), workflow
 
 **Flow Entrypoint**:
-The importable `module.qualname` path that identifies a flow object.
+The importable `module.qualname` path that identifies a flow object. Flow
+sections use it for their stable `prefect-flow-<entrypoint>` anchor.
 _Avoid_: Flow address, object path
+
+**Task Entrypoint**:
+The importable `module.qualname` path of the function behind a Prefect task.
+Task sections use it for their stable `prefect-task-<entrypoint>` anchor.
+_Avoid_: Task address, task path
 
 **Main-Flow Marker**:
 Docstring metadata that marks a flow for selection during a module scan.
@@ -55,8 +61,14 @@ Rendered documentation for a Pydantic model used as a flow or task parameter.
 _Avoid_: Model spec, schema docs
 
 **Unknown Node**:
-A graph node that cannot be matched to a flow or task object in the scanned modules.
+A graph node that cannot be matched to exactly one flow or task object in the
+scanned modules.
 _Avoid_: External node (unless it is known to be external)
+
+**Ambiguous Node**:
+A graph node whose name matches more than one module-level flow or task object.
+It is styled as unknown, warns, and stays unlinked.
+_Avoid_: Duplicate node, conflicting node
 
 **Offline**:
 Operating without a Prefect server or network access. Offline does not imply that no user code executes.

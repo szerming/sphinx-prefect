@@ -21,9 +21,11 @@ from sphinxcontrib.prefect._render import (
     dag_node_id,
     flow_node_id,
     make_section,
+    note_source_dependency,
     params_node_id,
     render_directive_content,
     render_flow_section,
+    render_graph_node_sections,
 )
 from sphinxcontrib.prefect._scan import scan_main_flows
 
@@ -86,17 +88,24 @@ class PrefectFlowDirective(SphinxDirective):
             errors=markers.errors,
         )
         models = _collect_models_or_report(self, flow)
-        section = render_flow_section(
+        result = render_flow_section(
             self,
             flow,
             markers,
             models,
             description_from=self.options.get("description-from"),
+            node_id=flow_node_id(flow),
             include_dag=_include_dag(self),
+            cross_reference=True,
+        )
+        report_diagnostics(
+            self,
+            warnings=result.diagnostics.warnings,
+            errors=result.diagnostics.errors,
         )
         if self.content:
-            render_directive_content(self, section)
-        return [section]
+            render_directive_content(self, result.section)
+        return [result.section]
 
 
 class PrefectParamsDirective(SphinxDirective):
@@ -113,16 +122,20 @@ class PrefectParamsDirective(SphinxDirective):
             return []
 
         models = _collect_models_or_report(self, flow)
-        return [
-            render_flow_section(
-                self,
-                flow,
-                None,
-                models,
-                node_id=params_node_id(flow),
-                include_description=False,
-            )
-        ]
+        result = render_flow_section(
+            self,
+            flow,
+            None,
+            models,
+            node_id=params_node_id(flow),
+            include_description=False,
+        )
+        report_diagnostics(
+            self,
+            warnings=result.diagnostics.warnings,
+            errors=result.diagnostics.errors,
+        )
+        return [result.section]
 
 
 class PrefectDagDirective(SphinxDirective):
@@ -143,7 +156,15 @@ class PrefectDagDirective(SphinxDirective):
             flow.name or type(flow).__name__,
             node_id=dag_node_id(flow),
         )
-        render_flow_graph(self, section, flow)
+        note_source_dependency(self, flow.fn)
+        graph = render_flow_graph(self, section, flow)
+        if graph is not None:
+            diagnostics = render_graph_node_sections(self, section, graph)
+            report_diagnostics(
+                self,
+                warnings=diagnostics.warnings,
+                errors=diagnostics.errors,
+            )
         return [section]
 
 
@@ -184,14 +205,19 @@ class PrefectFlowIndexDirective(SphinxDirective):
         include_dag = _include_dag(self)
         for selection in result.flows:
             models = _collect_models_or_report(self, selection.flow)
-            sections.append(
-                render_flow_section(
-                    self,
-                    selection.flow,
-                    selection.markers,
-                    models,
-                    node_id=flow_node_id(selection.flow),
-                    include_dag=include_dag,
-                )
+            rendered = render_flow_section(
+                self,
+                selection.flow,
+                selection.markers,
+                models,
+                node_id=flow_node_id(selection.flow),
+                include_dag=include_dag,
+                cross_reference=True,
             )
+            report_diagnostics(
+                self,
+                warnings=rendered.diagnostics.warnings,
+                errors=rendered.diagnostics.errors,
+            )
+            sections.append(rendered.section)
         return sections

@@ -5,8 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from prefect import flow, get_run_logger, task
+from pydantic import BaseModel, Field
 
 EXECUTED = Path(__file__).with_name("executed.txt")
+
+
+class Record(BaseModel):
+    """A record processed by a task."""
+
+    name: str = Field(description="Record name.")
 
 
 @task(viz_return_value=["record"])
@@ -21,9 +28,16 @@ def clean(rows: list[int]) -> list[int]:
     return rows
 
 
+@task
+def summarize(rows: list[int]) -> int:
+    """Summarize rows inside the subflow."""
+    return len(rows)
+
+
 @flow
 def transform(rows: list[int]) -> None:
     """Transform rows in a subflow."""
+    summarize(rows)
 
 
 @flow
@@ -39,6 +53,35 @@ def pipeline(records: int = 2) -> None:
     rows = extract(records)
     rows = clean(rows)
     transform(rows)
+
+
+@task
+def label(record: Record) -> str:
+    """Label a record.
+
+    Args:
+        record: Record to label.
+    """
+    return record.name
+
+
+@flow
+def with_model_task() -> None:
+    """Run a task with a Pydantic parameter."""
+    EXECUTED.write_text("with_model_task executed\n", encoding="utf-8")
+    label(Record(name="sample"))
+
+
+@flow
+def with_repeated_task(records: int = 1) -> None:
+    """Run the same task twice.
+
+    Args:
+        records: Number of records to extract.
+    """
+    EXECUTED.write_text("with_repeated_task executed\n", encoding="utf-8")
+    extract(records)
+    extract(records)
 
 
 @flow

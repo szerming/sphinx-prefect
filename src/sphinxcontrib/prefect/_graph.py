@@ -11,9 +11,11 @@ from typing import TYPE_CHECKING, Literal
 from sphinxcontrib.prefect._import import flow_entrypoint
 
 if TYPE_CHECKING:
-    from prefect import Flow
+    from prefect import Flow, Task
 
-NodeKind = Literal["main", "subflow", "task", "unknown"]
+    NodeObject = Flow | Task
+
+NodeKind = Literal["main", "subflow", "task", "unknown", "ambiguous"]
 
 _NODE = re.compile(
     r'^\s*(?P<node_id>[^\s\[\]]+)\s*\[\s*"(?P<label>(?:[^"\\]|\\.)*)"\s*\]\s*$'
@@ -33,6 +35,7 @@ _KIND_CLASSES: dict[str, str] = {
     "subflow": "prefectSubflow",
     "task": "prefectTask",
     "unknown": "prefectUnknown",
+    "ambiguous": "prefectUnknown",
 }
 
 
@@ -44,6 +47,7 @@ class GraphNode:
     label: str
     name: str
     kind: NodeKind = "unknown"
+    obj: NodeObject | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,24 @@ class ParsedGraph:
     edges: tuple[GraphEdge, ...] = ()
     extra_lines: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    ambiguous: tuple[str, ...] = ()
+
+    @property
+    def matched_nodes(self) -> tuple[GraphNode, ...]:
+        """Return nodes matched to a main flow, subflow, or task."""
+        return tuple(
+            node for node in self.nodes if node.kind in {"main", "subflow", "task"}
+        )
+
+    @property
+    def ambiguous_nodes(self) -> tuple[GraphNode, ...]:
+        """Return nodes whose names match multiple Flow or Task objects."""
+        return tuple(node for node in self.nodes if node.kind == "ambiguous")
+
+    @property
+    def unknown_nodes(self) -> tuple[GraphNode, ...]:
+        """Return nodes that matched no object."""
+        return tuple(node for node in self.nodes if node.kind == "unknown")
 
 
 def strip_duplicate_suffix(label: str) -> str:
@@ -109,33 +131,47 @@ def parse_mermaid(code: str) -> ParsedGraph:
 
 
 def classify_nodes(flow: Flow, graph: ParsedGraph) -> ParsedGraph:
-    """Classify graph nodes as the main flow, a subflow, task, or unknown."""
-    node_kinds, warnings = _module_node_kinds(flow)
+    """Classify graph nodes as the main flow, a subflow, task, or unknown.
+
+    Matched nodes retain the module-level ``Flow`` or ``Task`` object in
+    :attr:`GraphNode.obj`. Names shared by multiple objects are ambiguous and
+    stay unlinked.
+    """
+    objects, warnings = _module_objects(flow)
+    main_entrypoint = flow_entrypoint(flow)
     nodes: list[GraphNode] = []
     ambiguous: list[str] = []
     for node in graph.nodes:
-        matches = node_kinds.get(node.name, ())
+        matches = objects.get(node.name, ())
         if len(matches) == 1:
-            kind: NodeKind = matches[0]
+            matched = matches[0]
+            nodes.append(
+                replace(
+                    node,
+                    kind=_node_kind(matched, main_entrypoint),
+                    obj=matched,
+                )
+            )
         elif matches:
-            kind = "unknown"
             ambiguous.append(node.name)
+            nodes.append(replace(node, kind="ambiguous"))
         elif node.name == flow.name:
             # Prefect normally omits the main flow; handle a future graph that
             # includes it even when the module could not be inspected.
-            kind = "main"
+            nodes.append(replace(node, kind="main", obj=flow))
         else:
-            kind = "unknown"
-        nodes.append(replace(node, kind=kind))
+            nodes.append(replace(node, kind="unknown"))
 
+    ambiguous_names = tuple(dict.fromkeys(ambiguous))
     ambiguous_warnings = tuple(
         f"Graph node {name!r} in {flow.fn.__module__!r} matches multiple Flow "
-        "or Task objects; styling it as an unknown node."
-        for name in dict.fromkeys(ambiguous)
+        "or Task objects; it is left unlinked."
+        for name in ambiguous_names
     )
     return replace(
         graph,
         nodes=tuple(nodes),
+        ambiguous=ambiguous_names,
         warnings=tuple(
             dict.fromkeys((*graph.warnings, *warnings, *ambiguous_warnings))
         ),
@@ -173,10 +209,10 @@ def build_diagram(
     return "\n".join(lines)
 
 
-def _module_node_kinds(
+def _module_objects(
     flow: Flow,
-) -> tuple[dict[str, tuple[NodeKind, ...]], tuple[str, ...]]:
-    """Map module-level flow and task names to the objects that use them."""
+) -> tuple[dict[str, tuple[NodeObject, ...]], tuple[str, ...]]:
+    """Map module-level flow and task names to their objects."""
     # Importing Prefect is deferred until a DAG is classified.
     from prefect import Flow, Task
 
@@ -192,24 +228,26 @@ def _module_node_kinds(
             )
             return {}, (warning,)
 
-    kinds: dict[str, list[NodeKind]] = {}
+    objects: dict[str, list[NodeObject]] = {}
     seen: dict[str, set[int]] = {}
-    main_entrypoint = flow_entrypoint(flow)
     for obj in vars(module).values():
-        if isinstance(obj, Flow):
-            kind: NodeKind = (
-                "main" if flow_entrypoint(obj) == main_entrypoint else "subflow"
-            )
-        elif isinstance(obj, Task):
-            kind = "task"
-        else:
+        if not isinstance(obj, (Flow, Task)):
             continue
         if id(obj) in seen.setdefault(obj.name, set()):
             continue
         seen[obj.name].add(id(obj))
-        kinds.setdefault(obj.name, []).append(kind)
+        objects.setdefault(obj.name, []).append(obj)
 
-    return {name: tuple(values) for name, values in kinds.items()}, ()
+    return {name: tuple(values) for name, values in objects.items()}, ()
+
+
+def _node_kind(obj: NodeObject, main_entrypoint: str) -> NodeKind:
+    """Return the graph node kind for a matched Flow or Task object."""
+    from prefect import Flow
+
+    if isinstance(obj, Flow):
+        return "main" if flow_entrypoint(obj) == main_entrypoint else "subflow"
+    return "task"
 
 
 def _unique_main_id(nodes: tuple[GraphNode, ...]) -> str:

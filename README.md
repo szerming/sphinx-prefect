@@ -11,10 +11,11 @@ for self-contained flows.
 **Status:** v0.1 is in development. The package scaffold, the core
 `prefect-flow` and `prefect-params` directives, main-flow docstring markers,
 external RST and MyST Markdown descriptions, module scanning with
-`prefect-flow-index`, parameter tables, Pydantic model documentation, and
-runtime Mermaid flow graphs with `:show-dag:` and `prefect-dag` are
-implemented. The remaining work is tracked in
-issues [#8–#10](https://github.com/szerming/sphinx-prefect/issues).
+`prefect-flow-index`, parameter tables, Pydantic model documentation,
+runtime Mermaid flow graphs with `:show-dag:` and `prefect-dag`, and
+subflow/task sections with cross-references are implemented. The remaining
+work is tracked in
+issues [#9–#10](https://github.com/szerming/sphinx-prefect/issues).
 
 ## Project context
 
@@ -151,7 +152,7 @@ prefect_dag_sample_args = {
 ```
 
 `:no-dag:` suppresses a globally enabled graph. `prefect-dag` always opts in and
-renders only the graph:
+renders the graph without the flow description or parameter table:
 
 ```rst
 .. prefect-dag:: mypkg.flows.eda
@@ -161,6 +162,16 @@ The graph styles the main flow, subflows, tasks, and unknown nodes, and adds a
 legend. Missing sample arguments, unsupported `.submit()` / `.map()` calls,
 missing Prefect run context, and execution failures follow `prefect_on_error`
 and omit the graph. A graph records one execution path; subflows are leaves.
+
+Graph nodes that match module-level `Flow` and `Task` objects also get
+**Subflows** and **Tasks** sections with their description, signature,
+parameter table, and Pydantic models. Their names link to stable
+`prefect-flow-<entrypoint>` and `prefect-task-<entrypoint>` anchors from a
+short list in each section; the Mermaid source itself stays unlinked. Names
+that match no object, or more than one object, are listed under **Unknown
+nodes** without a link. Subflows are documented as leaves: their internal
+tasks are not expanded and no recursive graph is generated.
+
 The text/man builders render Mermaid's `[graph]` placeholder, and LaTeX/PDF
 output needs the `mmdc` binary. See the
 [usage guide](docs/guide.md#runtime-flow-graphs) for enablement, sample

@@ -36,9 +36,14 @@ def normalize_entrypoint(entrypoint: str) -> str:
     return f"{module_name}.{attribute_path}"
 
 
+def callable_entrypoint(fn: Any) -> str:
+    """Return the canonical importable entrypoint of *fn*."""
+    return f"{fn.__module__}.{fn.__qualname__}"
+
+
 def flow_entrypoint(flow: Flow) -> str:
     """Return the canonical importable entrypoint of *flow*."""
-    return f"{flow.fn.__module__}.{flow.fn.__qualname__}"
+    return callable_entrypoint(flow.fn)
 
 
 def resolve_flow(entrypoint: str) -> Flow:

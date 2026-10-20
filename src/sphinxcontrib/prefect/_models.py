@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from sphinxcontrib.prefect._import import flow_entrypoint
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from docutils import nodes
     from sphinx.util.docutils import SphinxDirective
@@ -36,17 +36,27 @@ class ModelCollection:
 
 def collect_flow_models(flow: Flow) -> ModelCollection:
     """Collect Pydantic v2 models from *flow*'s parameter annotations."""
+    return collect_callable_models(
+        flow.fn,
+        owner=f"flow {flow_entrypoint(flow)!r}",
+    )
+
+
+def collect_callable_models(
+    fn: Callable[..., Any],
+    *,
+    owner: str,
+) -> ModelCollection:
+    """Collect Pydantic v2 models from a flow's or task's callable annotations."""
     try:
-        hints = typing.get_type_hints(flow.fn, include_extras=True)
+        hints = typing.get_type_hints(fn, include_extras=True)
     except Exception as exc:
         return ModelCollection(
-            errors=(
-                f"Could not read type hints for flow {flow_entrypoint(flow)!r}: {exc}",
-            )
+            errors=(f"Could not read type hints for {owner}: {exc}",)
         )
 
     collector = _ModelCollector()
-    for name, parameter in inspect.signature(flow.fn).parameters.items():
+    for name, parameter in inspect.signature(fn).parameters.items():
         annotation = hints.get(name, parameter.annotation)
         if annotation is inspect.Parameter.empty:
             continue

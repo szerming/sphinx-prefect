@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from sphinx.util.docutils import SphinxDirective
 
     from prefect import Flow
+    from sphinxcontrib.prefect._graph import ParsedGraph
 
 _PREFECT_EXECUTION_WARNING = re.escape(
     "`flow.generate_mermaid_graph()` will execute code"
@@ -27,11 +28,15 @@ def render_flow_graph(
     directive: SphinxDirective,
     section: nodes.Element,
     flow: Flow,
-) -> None:
-    """Append a runtime flow graph, or a short note when nothing was observed."""
+) -> ParsedGraph | None:
+    """Append a runtime flow graph and return its classified nodes.
+
+    Returns ``None`` when the graph could not be generated or the flow body
+    called no tasks or subflows.
+    """
     code = generate_graph(directive, flow)
     if code is None:
-        return
+        return None
 
     graph = parse_mermaid(code)
     if not graph.nodes:
@@ -43,7 +48,7 @@ def render_flow_graph(
             classes=["prefect-dag-empty"],
         )
         section += note
-        return
+        return None
 
     from sphinxcontrib.mermaid import mermaid
 
@@ -56,6 +61,7 @@ def render_flow_graph(
     diagram["options"] = {}
     section += diagram
     section += _legend()
+    return classified
 
 
 def generate_graph(directive: SphinxDirective, flow: Flow) -> str | None:

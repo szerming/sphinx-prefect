@@ -23,7 +23,7 @@ the [v0.1 specification](specs/0001-sphinx-prefect-v0.1.md).
 | Parameter tables from Prefect's parameter schema | Available |
 | Pydantic model documentation with nested models | Available |
 | Runtime Mermaid flow graph with `:show-dag:` and `prefect-dag` | Available |
-| Subflow/task sections and cross-references | Planned — [#8](https://github.com/szerming/sphinx-prefect/issues/8) |
+| Subflow/task sections and cross-references | Available |
 
 ## Installation
 
@@ -184,7 +184,8 @@ comes from `flow.name`, which uses Prefect's hyphenated naming convention
 
 For each flow, the directive emits:
 
-- a section titled with `flow.name`;
+- a section titled with `flow.name` and the stable anchor
+  `prefect-flow-<entrypoint>`;
 - an **Entrypoint** field, formatted as `module.qualname`;
 - a **Version** field when `flow.version` is not `None`;
 - a **Signature** field from `inspect.signature(flow.fn)`;
@@ -194,7 +195,9 @@ For each flow, the directive emits:
 - a `pydantic-model` block for each Pydantic model used by a parameter,
   including nested models;
 - a styled Mermaid flow graph when a runtime DAG is enabled;
-- any directive body content, after the description and graph.
+- **Subflows**, **Tasks**, and **Unknown nodes** sections for the graph's
+  matched and unresolved nodes;
+- any directive body content, after all generated content.
 
 A flow with no docstring or description renders normally; the description is
 simply omitted. A flow with no parameters omits the parameter table.
@@ -331,7 +334,8 @@ generation is not side-effect-free. It is always opt-in:
   those sections;
 - `prefect_dag_enabled = True` enables it for every `prefect-flow` section
   unless the directive uses `:no-dag:`;
-- `prefect-dag` always attempts generation and renders only the graph;
+- `prefect-dag` always attempts generation and renders the graph without the
+  flow description or parameter table;
 - `:show-dag:` wins when a directive has both `:show-dag:` and `:no-dag:`.
 
 ```rst
@@ -370,8 +374,39 @@ empty diagram.
 
 Unknown nodes are graph names that cannot be matched to a `Flow` or `Task`
 object in the flow's module. A name that matches more than one object is also
-styled as unknown and emits a warning. Their documentation is handled by
-[#8](https://github.com/szerming/sphinx-prefect/issues/8).
+styled as unknown and emits a warning.
+
+### Subflow and task sections
+
+When a runtime graph runs, every node that matches a module-level `Flow` or
+`Task` object is also documented below the graph. `prefect-flow` renders these
+sections only when the graph is enabled; `prefect-dag` always attempts the
+graph and therefore always documents the nodes it observes.
+
+The generated **Subflows** section contains one child section per matched
+subflow with its title, entrypoint, signature, description, parameter table,
+and Pydantic model blocks. The **Tasks** section does the same for tasks, using
+`inspect.signature(task.fn)` and Prefect's `parameter_schema(task.fn)` for the
+signature and parameter metadata. Task descriptions come from
+`task.description`, which Prefect fills from the task docstring or an explicit
+`description=` on the task decorator.
+
+Each section starts with a short bullet list whose names link to the detailed
+sections. The anchors are stable and entrypoint-based:
+`prefect-flow-<entrypoint>` for flows and `prefect-task-<entrypoint>` for
+tasks. The Mermaid graph itself contains no links; links live in these lists.
+
+A subflow is a leaf. Its section documents the subflow object, but its internal
+tasks are not listed under the main flow and no recursive graph is generated.
+To document a subflow's internals, use a separate `prefect-flow` or
+`prefect-dag` directive for that subflow.
+
+Nodes that cannot be matched are listed under **Unknown nodes** without links,
+with a note saying whether the name was ambiguous or external. A name shared
+by multiple `Flow` or `Task` objects emits a warning and stays unlinked. Flows
+started through `arun_deployment()` or `run_deployment()` never appear in the
+graph, so they are not documented automatically; add explicit directives for
+them.
 
 ### Graph limitations and safety
 
@@ -520,9 +555,9 @@ Typical causes are:
 
 ## Current limitations and safety
 
-- Parameter tables and Pydantic model documentation cover flows. Task
-  parameter sections and subflow/task cross-reference sections are tracked in
-  [#8](https://github.com/szerming/sphinx-prefect/issues/8).
+- Parameter tables and Pydantic model documentation cover flows, documented
+  subflows, and observed tasks. Tasks and subflows are only documented when a
+  runtime graph observes them.
 - Docstrings and external `.rst` files are treated as reStructuredText.
   External Markdown descriptions are opt-in through the `markdown` extra and
   are parsed as MyST; MyST docstrings are not supported.
